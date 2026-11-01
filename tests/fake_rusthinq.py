@@ -25,6 +25,10 @@ class FakeRusthinq:
         self.cloud_calls: list[tuple[str, dict[str, Any]]] = []
         self.cloud_failure: tuple[int, str] | None = None
         """When set, the next LG account, bridge or invoke call answers with this status and error."""
+        self.backup: bytes | None = None
+        """What `/api/backup` serves; None answers like a daemon older than 0.2.0 with its dashboard on."""
+        self.backup_refusal: str | None = None
+        """When set, `/api/backup` answers 403 with this (an unauthenticated, non-loopback management bind)."""
         self._runner: web.AppRunner | None = None
         self.url = ""
 
@@ -92,6 +96,8 @@ class FakeRusthinq:
         app.router.add_get("/api/cloud", self._cloud)
         app.router.add_post("/api/cloud/{action:login|login/complete|logout|refresh}", self._cloud_action)
         app.router.add_post("/api/devices/{id}/bridge/{action}", self._bridge)
+        app.router.add_get("/api/health", self._health)
+        app.router.add_get("/api/backup", self._backup)
         self._runner = web.AppRunner(app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, "127.0.0.1", 0)
@@ -103,6 +109,17 @@ class FakeRusthinq:
         await self.drop_sockets()
         if self._runner is not None:
             await self._runner.cleanup()
+
+    async def _health(self, request: web.Request) -> web.Response:
+        return web.json_response({"status": "ok"})
+
+    async def _backup(self, request: web.Request) -> web.Response:
+        if self.backup_refusal is not None:
+            return web.json_response({"error": self.backup_refusal}, status=403)
+        if self.backup is None:
+            return web.Response(text="<!doctype html>", content_type="text/html")
+        return web.Response(body=self.backup, content_type="application/x-tar",
+                            headers={"Content-Disposition": 'attachment; filename="rusthinq-backup-1.tar"'})
 
     def _current(self, device: str, incarnation: str, generation: str, script_generation: str) -> bool:
         info = self.devices.get(device)

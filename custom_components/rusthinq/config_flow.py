@@ -1,5 +1,9 @@
-"""Config flow: Home Assistant runs rusthinq (embedded), from scratch or from an existing installation's export
+"""Config flow: Home Assistant runs rusthinq (embedded), from scratch or from an existing installation's backup
 (`migrate.py`), or connects to a running one (development).
+
+Moving an installation in takes its backup either straight from the old daemon (`GET /api/backup`) or as an uploaded
+file, shows what it holds, and installs it once the ports are free and, for a fetched backup, the old daemon has been
+stopped.
 
 There is one embedded entry per Home Assistant. Its ports are checked here, before anything is written.
 
@@ -18,7 +22,14 @@ from homeassistant.core import callback
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import FileSelector, FileSelectorConfig
+from homeassistant.helpers.selector import (
+    FileSelector,
+    FileSelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
+from homeassistant.util import dt as dt_util
 
 from . import daemon_ports, management_headers, migrate
 from .client import REQUEST_TIMEOUT, ManagementError
@@ -42,10 +53,19 @@ from .embedded import busy_ports, data_dir
 PORT = vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))
 STEP_MIGRATE = "migrate"
 """Not `import`: that step name is Home Assistant's, for YAML."""
+STEP_FETCH = "migrate_fetch"
+STEP_UPLOAD = "migrate_upload"
+STEP_CONFIRM = "migrate_confirm"
+PROBE_TIMEOUT = aiohttp.ClientTimeout(total=3)
 
 
 class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._imported: migrate.Imported | None = None
+        self._source: dict[str, Any] | None = None
+        """The running daemon the backup came from (`migrate_fetch`), to check it has been stopped."""
 
     @staticmethod
     @callback
@@ -74,33 +94,109 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_migrate(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(MODE_EMBEDDED)
         self._abort_if_unique_id_configured()
+        return self.async_show_menu(step_id=STEP_MIGRATE, menu_options=[STEP_FETCH, STEP_UPLOAD])
+
+    async def async_step_migrate_fetch(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Take the backup straight from the old daemon's management API."""
         errors: dict[str, str] = {}
         placeholders = {"problems": ""}
         if user_input is not None:
-            ports = {k: v for k, v in user_input.items() if k in DEFAULT_PORTS}
-            data = {CONF_MODE: MODE_EMBEDDED, CONF_PREFIX: DEFAULT_PREFIX, **DEFAULT_PORTS, **ports}
+            source = {**user_input, CONF_URL: user_input[CONF_URL].strip().rstrip("/")}
             try:
-                imported = await self.hass.async_add_executor_job(_read_upload, self.hass, user_input[CONF_ARCHIVE])
-                directory = data_dir(self.hass)
-                if clash := await self.hass.async_add_executor_job(migrate.conflicts, directory, imported):
-                    raise migrate.MigrateError(f"{directory} already holds a different {', '.join(clash)}")
+                archive = await migrate.fetch(async_get_clientsession(self.hass), source[CONF_URL],
+                                              management_headers(source))
+            except migrate.FetchError as err:
+                errors["base"] = err.reason
+                placeholders["problems"] = str(err)
+            else:
+                if await self._read(archive, errors, placeholders):
+                    self._source = source
+                    return await self.async_step_migrate_confirm()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_URL, default=DEFAULT_URL): str,
+                vol.Optional(CONF_USERNAME): str,
+                vol.Optional(CONF_PASSWORD): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+            }
+        )
+        return self.async_show_form(
+            step_id=STEP_FETCH, data_schema=self.add_suggested_values_to_schema(schema, user_input),
+            errors=errors, description_placeholders=placeholders,
+        )
+
+    async def async_step_migrate_upload(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """A backup file (the dashboard's, `thinqctl backup`'s) or a hand-made export."""
+        errors: dict[str, str] = {}
+        placeholders = {"problems": ""}
+        if user_input is not None:
+            try:
+                archive = await self.hass.async_add_executor_job(_read_upload, self.hass, user_input[CONF_ARCHIVE])
             except migrate.MigrateError as err:
                 errors["base"] = "invalid_archive"
                 placeholders["problems"] = str(err)
             else:
-                settings = dict(imported.settings)
-                data[CONF_PREFIX] = settings.pop("topic_prefix", DEFAULT_PREFIX)
-                data[CONF_SETTINGS] = settings
-                if await self._ports_ok(data, errors, placeholders):
-                    await self.hass.async_add_executor_job(migrate.install, directory, imported)
+                if await self._read(archive, errors, placeholders):
+                    self._source = None
+                    return await self.async_step_migrate_confirm()
+        schema = vol.Schema({vol.Required(CONF_ARCHIVE): FileSelector(FileSelectorConfig(accept=".tar,.tar.gz,.tgz"))})
+        return self.async_show_form(step_id=STEP_UPLOAD, data_schema=schema, errors=errors,
+                                    description_placeholders=placeholders)
+
+    async def _read(self, archive: bytes, errors: dict[str, str], placeholders: dict[str, str]) -> bool:
+        """Read an export into the flow, refusing one that cannot be installed here."""
+        try:
+            imported = await self.hass.async_add_executor_job(migrate.read_export, archive)
+            await self._check_conflicts(imported)
+        except migrate.MigrateError as err:
+            errors["base"] = "invalid_archive"
+            placeholders["problems"] = str(err)
+            return False
+        self._imported = imported
+        return True
+
+    async def _check_conflicts(self, imported: migrate.Imported) -> None:
+        directory = data_dir(self.hass)
+        if clash := await self.hass.async_add_executor_job(migrate.conflicts, directory, imported):
+            raise migrate.MigrateError(f"{directory} already holds a different {', '.join(clash)}")
+
+    async def async_step_migrate_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """What the backup holds, and this host's ports. The backup stays in the flow, so a refused port or an old
+        daemon still running only needs fixing, not another upload."""
+        imported = self._imported
+        assert imported is not None
+        errors: dict[str, str] = {}
+        placeholders = {"problems": "", **_origin_placeholders(imported.origin)}
+        if user_input is not None:
+            settings = dict(imported.settings)
+            data = {CONF_MODE: MODE_EMBEDDED, **DEFAULT_PORTS, **user_input,
+                    CONF_PREFIX: settings.pop("topic_prefix", DEFAULT_PREFIX), CONF_SETTINGS: settings}
+            try:
+                await self._check_conflicts(imported)
+            except migrate.MigrateError as err:
+                errors["base"] = "invalid_archive"
+                placeholders["problems"] = str(err)
+            else:
+                if self._source is not None and await self._answers(self._source):
+                    errors["base"] = "source_running"
+                    placeholders["problems"] = self._source[CONF_URL]
+                elif await self._ports_ok(data, errors, placeholders):
+                    await self.hass.async_add_executor_job(migrate.install, data_dir(self.hass), imported)
                     return self.async_create_entry(title="rusthinq", data=data)
-        schema = vol.Schema({vol.Required(CONF_ARCHIVE): FileSelector(FileSelectorConfig(accept=".tar.gz,.tgz,.tar"))})
-        schema = schema.extend(_ports_schema().schema)
         return self.async_show_form(
-            step_id=STEP_MIGRATE, data_schema=self.add_suggested_values_to_schema(
-                schema, {k: v for k, v in (user_input or {}).items() if k != CONF_ARCHIVE}),
+            step_id=STEP_CONFIRM, data_schema=self.add_suggested_values_to_schema(_ports_schema(), user_input),
             errors=errors, description_placeholders=placeholders,
         )
+
+    async def _answers(self, source: dict[str, Any]) -> bool:
+        """Whether the daemon the backup was taken from still runs: two would answer the same appliances and LG
+        account, and it would go on changing what was copied."""
+        try:
+            async with async_get_clientsession(self.hass).get(
+                f"{source[CONF_URL]}/api/health", headers=management_headers(source), timeout=PROBE_TIMEOUT
+            ):
+                return True
+        except (aiohttp.ClientError, TimeoutError):
+            return False
 
     async def _ports_ok(self, data: dict[str, Any], errors: dict[str, str], placeholders: dict[str, str]) -> bool:
         if len({data[k] for k in DEFAULT_PORTS}) < len(DEFAULT_PORTS):
@@ -160,14 +256,26 @@ def _ports_schema() -> vol.Schema:
     )
 
 
-def _read_upload(hass, file_id: str) -> migrate.Imported:
-    """Read an uploaded export (the upload is gone afterwards). Runs in the executor."""
+def _read_upload(hass, file_id: str) -> bytes:
+    """The uploaded file (the upload is gone afterwards). Runs in the executor."""
     try:
         with process_uploaded_file(hass, file_id) as path:
-            archive = path.read_bytes()
+            if path.stat().st_size > migrate.MAX_ARCHIVE:
+                raise migrate.MigrateError("the archive exceeds 64 MiB")
+            return path.read_bytes()
     except (ValueError, OSError) as err:
         raise migrate.MigrateError(f"the upload cannot be read: {err}") from err
-    return migrate.read_export(archive)
+
+
+def _origin_placeholders(origin: migrate.Origin) -> dict[str, str]:
+    unknown = "–"
+    return {
+        "hostname": origin.hostname or unknown,
+        "devices": unknown if origin.devices is None else str(origin.devices),
+        "account": origin.account or unknown,
+        "rusthinq": origin.rusthinq or unknown,
+        "created": dt_util.as_local(origin.created).strftime("%Y-%m-%d %H:%M") if origin.created else unknown,
+    }
 
 
 COUNTRY = vol.All(str, vol.Strip, vol.Upper, vol.Match(r"^[A-Z]{2}$"))

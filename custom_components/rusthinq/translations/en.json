@@ -37,14 +37,44 @@
       },
       "migrate": {
         "title": "Move an existing rusthinq into Home Assistant",
-        "description": "Keeps the CA your appliances trust, their device records, the LG account and the settings appliances notice, so nothing needs provisioning again.\n\n1. Stop rusthinq on the old host, and keep it stopped: both would answer the same appliances and LG account.\n2. In the directory of its config.toml, archive config.toml with the files it names (CA key and certificate, device ledger, LG account and its .pairings), for example:\n   `tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`\n3. Upload the archive here and choose this host's ports.\n4. Point the appliances' route (DNS or redirect) at this host.",
+        "description": "Keeps the CA your appliances trust, their device records, the LG account and the settings appliances notice, so nothing needs provisioning again. Where should the backup come from?",
+        "menu_options": {
+          "migrate_fetch": "Copy it from the running rusthinq",
+          "migrate_upload": "Upload a backup file"
+        }
+      },
+      "migrate_fetch": {
+        "title": "Copy from the running rusthinq",
+        "description": "Home Assistant downloads the backup from the old rusthinq's management API (rusthinq 0.2.0 or later). rusthinq hands it out only when its management API has a user and password or listens on loopback only, since it holds the CA key and LG tokens.",
         "data": {
-          "archive": "Export archive",
+          "url": "URL",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "url": "Base URL of the old rusthinq's management API, for example http://192.168.1.10:44401",
+          "username": "`[management] user`, if it has one",
+          "password": "`[management] password`"
+        }
+      },
+      "migrate_upload": {
+        "title": "Upload a backup",
+        "description": "Take a backup on the old host with the dashboard (System → Download backup) or `sudo thinqctl backup`, and upload it here.\n\nWithout either, archive config.toml with the files it names, in its directory, for example:\n`tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`",
+        "data": {
+          "archive": "Backup"
+        },
+        "data_description": {
+          "archive": "rusthinq-backup-….tar, or a .tar.gz of config.toml and the files it names"
+        }
+      },
+      "migrate_confirm": {
+        "title": "Move this rusthinq in",
+        "description": "The backup holds:\n- host name: **{hostname}**\n- devices: **{devices}**\n- LG account: **{account}**\n- written by rusthinq {rusthinq} at {created}\n\n1. **Stop rusthinq on the old host now**, and keep it stopped: both would answer the same appliances and LG account.\n2. Choose this host's ports and submit.\n3. Point the appliances' route (DNS or redirect) at this host.",
+        "data": {
           "https_port": "HTTPS port",
           "mqtt_port": "MQTT port"
         },
         "data_description": {
-          "archive": "A .tar.gz of config.toml and the files it names",
           "https_port": "Where appliances are provisioned and register (443 unless a redirect points here)",
           "mqtt_port": "Announced to appliances when they register; any free port works"
         }
@@ -56,7 +86,10 @@
       "invalid_prefix": "The topic prefix must not be empty.",
       "duplicate_ports": "Each listener needs its own port.",
       "ports_unavailable": "These ports cannot be used: {problems}",
-      "invalid_archive": "The archive cannot be imported: {problems}"
+      "invalid_archive": "The backup cannot be imported: {problems}",
+      "backup_refused": "rusthinq refused the backup: {problems}",
+      "backup_unsupported": "This rusthinq cannot hand out a backup (it needs 0.2.0 or later). Upload a file instead.",
+      "source_running": "The old rusthinq at {problems} still answers. Stop it first."
     },
     "abort": {
       "already_configured": "rusthinq is already set up."

@@ -54,18 +54,27 @@ port 443 there. rusthinq then tells appliances 443 anyway. In order of preferenc
 
 ## Moving an existing installation
 
-Moving keeps the CA the appliances trust, so none needs provisioning again.
+Moving keeps the CA the appliances trust, so none needs provisioning again. Add the integration with **Move an
+existing rusthinq into Home Assistant** and take the old installation's backup one of two ways:
+
+- **Copy it from the running rusthinq** (0.2.0 or later): give its management API address, and its user and password
+  if it has them. rusthinq hands the backup out only behind credentials or on a loopback bind, since it holds the CA
+  key and LG tokens.
+- **Upload a backup file**: the dashboard's System → Download backup, or `sudo thinqctl backup`. Without either, an
+  archive of `config.toml` and the files it names, made in its directory, works too:
+  `tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`
+
+The next step shows what the backup holds (host name, devices, LG account, the rusthinq version that wrote it) and
+asks for this host's ports. Then:
 
 1. Stop rusthinq on the old host and keep it stopped: two daemons would answer the same appliances and LG account.
-2. In the directory of its `config.toml`, archive it with the files it names, for example:
-   `tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`
-3. Add the integration with **Move an existing rusthinq into Home Assistant**, upload the archive and choose this
-   host's ports.
-4. Point the appliances' route (DNS or redirect) at this host.
+   A backup copied from a running rusthinq is installed only once that rusthinq no longer answers.
+2. Submit the ports.
+3. Point the appliances' route (DNS or redirect) at this host.
 
 The CA, the device ledger, the LG account with its pairings and the settings appliances notice (`hostname`,
-`legacy_tls`, `advertise_requested_host`, `bridge_dns`, the driver topic prefix) move over. Different files already in
-`/config/rusthinq/` are never replaced.
+`legacy_tls`, `advertise_requested_host`, `bridge_dns`, the driver topic prefix) move over. External MQTT and its
+retained-topic inventory stay behind. Different files already in `/config/rusthinq/` are never replaced.
 
 ## LG account
 
