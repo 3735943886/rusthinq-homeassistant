@@ -69,7 +69,7 @@ class FakeRusthinq:
                 "scriptGeneration": info["scriptGeneration"]}
 
     def state(self) -> dict[str, Any]:
-        return {"devices": self.devices, "version": "0.2.0-rc8", "management": True,
+        return {"devices": self.devices, "version": "0.2.0", "management": True,
                 "features": {"bridge": True, "scripting": True}}
 
     async def output(self, device: str, topic: str, payload: str, retain: bool = True) -> None:

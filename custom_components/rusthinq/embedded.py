@@ -7,7 +7,7 @@ of the `rusthinq` wheel, so the daemon still starts when the wheel cannot be rei
 `config.toml` is rewritten on every start: external MQTT off, the management API on a free 127.0.0.1 port with fresh
 random credentials.
 
-rusthinq 0.2.0-rc8 behavior this relies on: a port in use makes it exit 1 at once with an `AddrInUse` error that names
+rusthinq 0.2.0 behavior this relies on: a port in use makes it exit 1 at once with an `AddrInUse` error that names
 no address (hence the port check before starting); `/api/health` answers within tens of milliseconds; SIGTERM shuts it
 down cleanly; logs go to stderr as ` LEVEL target: message`.
 """
