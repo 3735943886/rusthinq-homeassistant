@@ -13,7 +13,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.setup import async_setup_component
 
-from custom_components.rusthinq import embedded, migrate, scripts
+from custom_components.rusthinq import embedded, migrate
 from custom_components.rusthinq.const import (
     CONF_ARCHIVE,
     CONF_HTTPS_PORT,
@@ -268,10 +268,6 @@ async def test_the_migrate_flow_installs_the_export_and_the_daemon_runs_on_it(
 
     monkeypatch.setattr("custom_components.rusthinq.config_flow.process_uploaded_file", uploaded)
 
-    async def no_upstream(_http):
-        raise scripts.ScriptsError("offline")
-
-    monkeypatch.setattr(scripts, "latest_commit", no_upstream)
     await async_setup_component(hass, "ildevice", {})
     menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     menu = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate"})

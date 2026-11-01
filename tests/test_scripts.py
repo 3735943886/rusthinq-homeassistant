@@ -105,6 +105,23 @@ def embedded_entry(hass, tmp_path, socket_enabled, enable_custom_integrations, m
     return entry
 
 
+async def test_setup_does_not_wait_for_github(hass, embedded_entry, monkeypatch):
+    checked = asyncio.Event()
+
+    async def unreachable(_http):
+        checked.set()
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(scripts, "latest_commit", unreachable)
+    async with asyncio.timeout(20):  # the daemon's start, not GitHub's timeout
+        assert await hass.config_entries.async_setup(embedded_entry.entry_id)
+    await asyncio.wait_for(checked.wait(), 5)
+    state = hass.states.get("update.rusthinq_drivers")
+    assert state.attributes["installed_version"] == OLD[:7]
+    assert state.state == "off"  # upstream unknown yet: nothing offered
+    assert await hass.config_entries.async_unload(embedded_entry.entry_id)  # cancels the pending check
+
+
 async def daemon_source(entry) -> dict:
     daemon = entry.runtime_data.daemon
     async with aiohttp.ClientSession() as http, http.get(f"{daemon.url}/api/diagnostics",
@@ -115,9 +132,10 @@ async def daemon_source(entry) -> dict:
 async def test_the_update_entity_installs_upstream_and_the_daemon_reloads(hass, embedded_entry):
     entry = embedded_entry
     assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    async with asyncio.timeout(5):  # upstream is checked after setup
+        while hass.states.get("update.rusthinq_drivers").state != "on":
+            await asyncio.sleep(0.05)
     state = hass.states.get("update.rusthinq_drivers")
-    assert state.state == "on"
     assert state.attributes["installed_version"] == OLD[:7]
     assert state.attributes["latest_version"] == NEW[:7]
     assert state.attributes["release_url"] == scripts.compare_url(OLD, NEW)

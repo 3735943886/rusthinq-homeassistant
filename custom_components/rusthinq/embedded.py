@@ -333,7 +333,7 @@ class EmbeddedDaemon:
         await self._hass.async_add_executor_job(self._prepare_files, package_bin)
         self.version = await self._binary_version()
         await self._hass.async_add_executor_job(self._note_version)
-        if not (self._dir / "scripts").is_dir():
+        if not await self._hass.async_add_executor_job((self._dir / "scripts").is_dir):
             await self._download_scripts()
         self.management_port = await self._hass.async_add_executor_job(free_local_port)
         config = render_config(

@@ -17,6 +17,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import RusthinqConfigEntry, scripts
+from .const import DOMAIN
 from .embedded import data_dir
 from .status import service_device
 
@@ -30,7 +31,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: RusthinqConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     if entry.runtime_data.daemon is not None:
-        async_add_entities([ScriptsUpdate(entry)], update_before_add=True)
+        async_add_entities([ScriptsUpdate(entry)])
 
 
 def _short(sha: str | None) -> str | None:
@@ -68,6 +69,18 @@ class ScriptsUpdate(UpdateEntity):
     def version_is_newer(self, latest_version: str, installed_version: str) -> bool:
         # Commits have no order to compare; upstream master differing from what is installed is the update.
         return latest_version != installed_version
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._installed = await self.hass.async_add_executor_job(scripts.installed_commit, data_dir(self.hass))
+        # Upstream is checked after setup, not with `update_before_add`: setup, and with it Home Assistant's start,
+        # would wait for GitHub (up to CHECK_TIMEOUT when it is slow or unreachable). Polling takes over after
+        # SCAN_INTERVAL.
+        self._entry.async_create_background_task(self.hass, self._async_first_update(), f"{DOMAIN} drivers check")
+
+    async def _async_first_update(self) -> None:
+        await self.async_update()
+        self.async_write_ha_state()
 
     async def async_update(self) -> None:
         self._installed = await self.hass.async_add_executor_job(scripts.installed_commit, data_dir(self.hass))

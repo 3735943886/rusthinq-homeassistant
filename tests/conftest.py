@@ -16,6 +16,17 @@ def load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text())
 
 
+@pytest.fixture(autouse=True)
+def no_github(monkeypatch):
+    """Upstream rusthinq-scripts is checked in the background after setup; tests stay offline unless they stub it."""
+    from custom_components.rusthinq import scripts
+
+    async def offline(_http):
+        raise scripts.ScriptsError("offline")
+
+    monkeypatch.setattr(scripts, "latest_commit", offline)
+
+
 @pytest.fixture
 async def rusthinq(socket_enabled):
     """The fake listens on 127.0.0.1, which pytest-homeassistant-custom-component's socket guard blocks by default."""
