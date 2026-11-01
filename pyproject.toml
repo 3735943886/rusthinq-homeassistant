@@ -1,0 +1,14 @@
+[project]
+name = "rusthinq-homeassistant"
+version = "0.0.0"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.optional-dependencies]
+# Pinned like ildevice-homeassistant's, so both test against the same Home Assistant.
+test = ["pytest-homeassistant-custom-component==0.13.366"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

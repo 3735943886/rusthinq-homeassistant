@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "rusthinq management API",
+        "description": "Connect to a running rusthinq. This entry is for development; the built-in daemon will replace it.",
+        "data": {
+          "url": "URL",
+          "username": "Username",
+          "password": "Password",
+          "prefix": "Topic prefix"
+        },
+        "data_description": {
+          "url": "Base URL of the management API, for example http://127.0.0.1:44401",
+          "prefix": "rusthinq's `[drivers] topic_prefix`"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the management API.",
+      "invalid_auth": "The management API rejected the username or password.",
+      "invalid_prefix": "The topic prefix must not be empty."
+    },
+    "abort": {
+      "already_configured": "This rusthinq is already configured."
+    }
+  }
+}

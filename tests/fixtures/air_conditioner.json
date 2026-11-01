@@ -1,0 +1,115 @@
+{
+ "comment": "Presentation of a ThinQ2 air conditioner (CST_570004_WW) captured from rusthinq 0.2.0-rc8, device id replaced.",
+ "publications": [
+  {
+   "payload": "off",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/action"
+  },
+  {
+   "payload": "60min",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/auto_dry"
+  },
+  {
+   "payload": "0",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/auto_dry_remaining"
+  },
+  {
+   "payload": "true",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/available"
+  },
+  {
+   "payload": "false",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/comfort_saving"
+  },
+  {
+   "payload": "{\"class\":\"air_conditioner\",\"id\":\"00000000-0000-0000-0000-0000000000ac\",\"il\":0,\"kind\":\"climate\",\"label\":\"Air conditioner\",\"model\":\"CST_570004_WW\",\"props\":{\"action\":{\"options\":[\"off\",\"idle\",\"cooling\",\"drying\",\"fan\",\"active\"],\"role\":\"action\",\"type\":\"select\"},\"auto_dry\":{\"category\":\"config\",\"options\":[\"off\",\"10min\",\"30min\",\"60min\",\"smart\"],\"rw\":true,\"src\":{\"tlv_tag\":\"0x20e\"},\"type\":\"select\"},\"auto_dry_remaining\":{\"category\":\"diagnostic\",\"class\":\"duration\",\"src\":{\"tlv_tag\":\"0x225\"},\"type\":\"number\",\"unit\":\"min\"},\"available\":{\"role\":\"available\",\"type\":\"binary\"},\"comfort_saving\":{\"category\":\"config\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x23f\"},\"type\":\"binary\"},\"display\":{\"category\":\"config\",\"options\":[\"off\",\"50%\",\"100%\"],\"rw\":true,\"src\":{\"tlv_tag\":\"0x21f\"},\"type\":\"select\"},\"energy_save\":{\"category\":\"config\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x20d\"},\"type\":\"binary\"},\"error\":{\"category\":\"diagnostic\",\"src\":{\"tlv_tag\":\"0x221\"},\"type\":\"number\"},\"fan\":{\"options\":[\"auto\",\"very_low\",\"low\",\"medium\",\"high\",\"power\"],\"role\":\"fan_speed\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x1fa\"},\"type\":\"select\"},\"filter_life\":{\"category\":\"diagnostic\",\"class\":\"duration\",\"src\":{\"tlv_tag\":\"0x356\"},\"type\":\"number\",\"unit\":\"h\"},\"filter_remaining\":{\"category\":\"diagnostic\",\"series\":\"gauge\",\"src\":{\"tlv_tag\":\"0x355\"},\"type\":\"number\",\"unit\":\"%\"},\"filter_used\":{\"category\":\"diagnostic\",\"class\":\"duration\",\"series\":\"counter\",\"src\":{\"tlv_tag\":\"0x355\"},\"type\":\"number\",\"unit\":\"h\"},\"humidity\":{\"class\":\"humidity\",\"role\":\"current_humidity\",\"series\":\"gauge\",\"src\":{\"tlv_tag\":\"0x336\"},\"type\":\"number\",\"unit\":\"%\"},\"mode\":{\"options\":[\"cool\",\"dry\",\"fan_only\",\"auto\"],\"role\":\"mode\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x1f9\"},\"type\":\"select\"},\"power\":{\"role\":\"on\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x1f7\"},\"type\":\"binary\"},\"power_draw\":{\"class\":\"power\",\"series\":\"gauge\",\"src\":{\"tlv_tag\":\"0x2b3\"},\"type\":\"number\",\"unit\":\"W\"},\"sleep_timer\":{\"class\":\"duration\",\"max\":900,\"min\":0,\"rw\":true,\"src\":{\"tlv_tag\":\"0x21a\"},\"step\":1,\"type\":\"number\",\"unit\":\"min\"},\"swing_horizontal\":{\"role\":\"swing_horizontal\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x206\"},\"type\":\"binary\"},\"swing_vertical\":{\"role\":\"swing_vertical\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x205\"},\"type\":\"binary\"},\"target\":{\"max\":30,\"min\":16,\"role\":\"target_temperature\",\"rw\":true,\"src\":{\"tlv_tag\":\"0x1fe\"},\"step\":0.5,\"type\":\"number\",\"unit\":\"°C\"},\"temperature\":{\"role\":\"current_temperature\",\"src\":{\"tlv_tag\":\"0x1fd\"},\"type\":\"number\",\"unit\":\"°C\"},\"wind_mode\":{\"category\":\"config\",\"options\":[\"off\",\"manner\",\"long_power\",\"study\",\"auto_temp\"],\"rw\":true,\"type\":\"select\"}},\"source\":\"rusthinq\",\"vendor\":\"LG\",\"x-mqtt\":{\"reject\":\"rusthinq/{id}/reject\",\"set\":\"rusthinq/{id}/{prop}/set\",\"state\":\"rusthinq/{id}/{prop}\"}}",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/descriptor"
+  },
+  {
+   "payload": "100%",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/display"
+  },
+  {
+   "payload": "0",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/error"
+  },
+  {
+   "payload": "high",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/fan"
+  },
+  {
+   "payload": "2400",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/filter_life"
+  },
+  {
+   "payload": "21",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/filter_remaining"
+  },
+  {
+   "payload": "1887",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/filter_used"
+  },
+  {
+   "payload": "51",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/humidity"
+  },
+  {
+   "payload": "fan_only",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/mode"
+  },
+  {
+   "payload": "false",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/power"
+  },
+  {
+   "payload": "0",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/power_draw"
+  },
+  {
+   "payload": "0",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/sleep_timer"
+  },
+  {
+   "payload": "false",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/swing_horizontal"
+  },
+  {
+   "payload": "false",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/swing_vertical"
+  },
+  {
+   "payload": "18",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/target"
+  },
+  {
+   "payload": "24",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/temperature"
+  },
+  {
+   "payload": "off",
+   "retain": true,
+   "topic": "rusthinq/00000000-0000-0000-0000-0000000000ac/wind_mode"
+  }
+ ]
+}
