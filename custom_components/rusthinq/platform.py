@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .status import PLATFORMS as STATUS_PLATFORMS
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -13,15 +15,15 @@ if TYPE_CHECKING:
 
 
 def platform_setup(module: str):
-    """The `async_setup_entry` of the platform module named `module` (its `__name__`). `binary_sensor` and `sensor`
-    also carry this integration's device status entities (`status.py`)."""
+    """The `async_setup_entry` of the platform module named `module` (its `__name__`). Some platforms also carry this
+    integration's own entities (`status.py`)."""
     platform = module.rsplit(".", 1)[-1]
 
     async def async_setup_entry(
         hass: HomeAssistant, entry: RusthinqConfigEntry, async_add_entities: AddEntitiesCallback
     ) -> None:
         entry.runtime_data.hub.register_platform(platform, async_add_entities)
-        if platform in ("binary_sensor", "sensor"):
+        if platform in STATUS_PLATFORMS:
             entry.runtime_data.status.register_platform(platform, async_add_entities)
 
     return async_setup_entry

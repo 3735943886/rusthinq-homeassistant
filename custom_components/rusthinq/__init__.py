@@ -32,7 +32,7 @@ from .const import (
     ENTRY_PLATFORMS,
     MODE_EMBEDDED,
 )
-from .embedded import DaemonError, EmbeddedDaemon
+from .embedded import DaemonError, EmbeddedDaemon, PortsUnavailable, ports_issue
 from .status import DeviceStatus
 
 if TYPE_CHECKING:
@@ -77,7 +77,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
             await daemon.async_start()
         except DaemonError as err:
             await daemon.async_stop()
+            if isinstance(err, PortsUnavailable):
+                ports_issue(hass, err.problems)
             raise ConfigEntryNotReady(str(err)) from err
+        ports_issue(hass, None)
 
         async def stop_daemon(_event: Event) -> None:
             # Home Assistant does not unload entries when it stops.

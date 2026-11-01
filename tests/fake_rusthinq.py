@@ -20,6 +20,11 @@ class FakeRusthinq:
         self.sockets: list[web.WebSocketResponse] = []
         self.connections = 0
         self.device_reads = 0
+        self.account: dict[str, Any] = {"busy": False, "country": None, "error": None, "loggedIn": False,
+                                        "stored": False}
+        self.cloud_calls: list[tuple[str, dict[str, Any]]] = []
+        self.cloud_failure: tuple[int, str] | None = None
+        """When set, the next LG account or bridge call answers with this status and error."""
         self._runner: web.AppRunner | None = None
         self.url = ""
 
@@ -84,6 +89,9 @@ class FakeRusthinq:
         app.router.add_get("/api/devices", self._devices)
         app.router.add_get("/api/devices/{id}/presentation", self._presentation)
         app.router.add_post("/api/devices/{id}/invoke", self._invoke)
+        app.router.add_get("/api/cloud", self._cloud)
+        app.router.add_post("/api/cloud/{action:login|login/complete|logout|refresh}", self._cloud_action)
+        app.router.add_post("/api/devices/{id}/bridge/{action}", self._bridge)
         self._runner = web.AppRunner(app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, "127.0.0.1", 0)
@@ -135,3 +143,45 @@ class FakeRusthinq:
         if not self._current(device, body["incarnation"], body["generation"], body["script_generation"]):
             return web.json_response({"error": "StaleSession"}, status=409)
         return web.json_response({"status": "accepted", "sequence": str(len(self.invokes))}, status=202)
+
+    # ---- LG account and bridge (rusthinq `management.rs`, `api.rs` cloud_device) -------------
+
+    def _failure(self) -> web.Response | None:
+        if self.cloud_failure is None:
+            return None
+        status, message = self.cloud_failure
+        self.cloud_failure = None
+        return web.json_response({"error": message}, status=status)
+
+    async def _cloud(self, request: web.Request) -> web.Response:
+        return web.json_response({"account": self.account, "enabled": True, "inventory": []})
+
+    async def _cloud_action(self, request: web.Request) -> web.Response:
+        action, body = request.match_info["action"], await request.json()
+        self.cloud_calls.append((action, body))
+        if (failure := self._failure()) is not None:
+            return failure
+        if action == "login":
+            self.account["country"] = body["country"]
+            return web.json_response({"url": f"https://kr.m.lgaccount.com/login/signIn?country={body['country']}"})
+        if action == "login/complete":
+            self.account.update(loggedIn=True, stored=True)
+        elif action == "logout":
+            self.account.update(loggedIn=False, stored=False)
+        return web.json_response(self.account)
+
+    async def _bridge(self, request: web.Request) -> web.Response:
+        device, action, body = request.match_info["id"], request.match_info["action"], await request.json()
+        self.cloud_calls.append((f"bridge/{action}", {"device": device, **body}))
+        if (failure := self._failure()) is not None:
+            return failure
+        info = self.devices[device]
+        if body.get("incarnation") != info["incarnation"]:
+            return web.json_response({"error": "stale"}, status=409)
+        if action == "pair":
+            info.update(bridgePaired=True, bridgeEnabled=False, bridged=False)
+        elif action in ("enable", "disable"):
+            info.update(bridgeEnabled=action == "enable", bridged=action == "enable")
+        elif action == "unpair":
+            info.update(bridgePaired=False, bridgeEnabled=False, bridged=False, bridgePending=False)
+        return web.json_response({"device": device})

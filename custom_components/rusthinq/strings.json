@@ -61,5 +61,53 @@
     "abort": {
       "already_configured": "rusthinq is already set up."
     }
+  },
+  "issues": {
+    "ports_unavailable": {
+      "title": "rusthinq cannot open its ports",
+      "description": "The built-in rusthinq cannot start: {problems}.\n\nFree the port, or choose other ports by removing the integration and adding it again (the CA and devices stay in /config/rusthinq, so nothing is lost). Appliances always open HTTPS on 443; if rusthinq listens elsewhere, redirect 443 to it. rusthinq keeps retrying on its own."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "LG account",
+        "description": "rusthinq is {state}. Last error: {error}.\n\nThe LG account lets rusthinq name your appliances and keep the LG ThinQ app working through its per-device bridge.",
+        "menu_options": {
+          "login": "Sign in to LG",
+          "logout": "Sign out",
+          "refresh": "Sign in again with the saved credentials"
+        }
+      },
+      "login": {
+        "title": "Sign in to LG",
+        "description": "rusthinq asks LG for a sign-in page for this country.",
+        "data": {
+          "country": "Country"
+        },
+        "data_description": {
+          "country": "Two-letter country code of the LG account, e.g. KR or US"
+        }
+      },
+      "login_complete": {
+        "title": "Sign in to LG",
+        "description": "1. Open [LG's sign-in page]({sign_in_url}) and sign in.\n2. The browser ends on a blank page whose address starts with https://…/login/iabClose. Copy that whole address.\n3. Paste it here.",
+        "data": {
+          "url": "Address after signing in"
+        }
+      },
+      "logout": {
+        "title": "Sign out of LG",
+        "description": "rusthinq forgets the LG credentials. Bridged devices disconnect from LG until you sign in again; local control is unaffected."
+      }
+    },
+    "error": {
+      "cloud_failed": "rusthinq could not do that: {problem}"
+    },
+    "abort": {
+      "not_running": "rusthinq is not running.",
+      "no_bridge": "This rusthinq has no LG bridge.",
+      "cloud_failed": "rusthinq could not do that: {problem}"
+    }
   }
 }

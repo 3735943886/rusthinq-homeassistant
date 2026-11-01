@@ -82,7 +82,9 @@ async def test_the_daemon_runs_with_its_files_and_stops_with_the_entry(hass, con
     assert not (config_dir / "rusthinq.pid").exists()
 
 
-async def test_a_port_in_use_is_named_and_retried(hass, config_dir):
+async def test_a_port_in_use_is_named_retried_and_raised_in_repairs(hass, config_dir):
+    from homeassistant.helpers import issue_registry as ir
+
     with socket.socket() as taken:
         taken.bind(("0.0.0.0", 0))
         taken.listen()
@@ -90,7 +92,24 @@ async def test_a_port_in_use_is_named_and_retried(hass, config_dir):
         entry = await setup(hass, **{CONF_MQTT_PORT: port})
         assert entry.state is ConfigEntryState.SETUP_RETRY
         assert entry.reason == f"port {port} (mqtt) is already in use"
-    await hass.config_entries.async_unload(entry.entry_id)
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, "ports_unavailable")
+        assert issue.translation_placeholders == {"problems": f"port {port} (mqtt) is already in use"}
+    # the port is free again: the retry starts the daemon and the issue goes
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "ports_unavailable") is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_downgrade_is_warned_about(hass, config_dir, caplog):
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / ".last-version").write_text("9.9.9\n")
+    entry = await setup(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    assert "runs on data last used by 9.9.9" in caplog.text
+    assert (config_dir / ".last-version").read_text().strip() == entry.runtime_data.daemon.version
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_a_crashed_daemon_is_restarted(hass, config_dir, monkeypatch):

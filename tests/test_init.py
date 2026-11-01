@@ -33,6 +33,12 @@ def climate_entity(hass) -> str | None:
                 None)
 
 
+def appliances(hass, entry) -> list:
+    """The entry's devices but the rusthinq service device."""
+    return [d for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+            if d.entry_type is not dr.DeviceEntryType.SERVICE]
+
+
 async def setup(hass, server) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: server.url, CONF_PREFIX: "rusthinq"})
     entry.add_to_hass(hass)
@@ -55,7 +61,7 @@ async def test_a_device_appears_under_this_domain_and_takes_commands(hass, air_c
     assert state.attributes["temperature"] == 18
     assert state.attributes["current_temperature"] == 24
 
-    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    devices = appliances(hass, entry)
     assert [d.identifiers for d in devices] == [{(DOMAIN, AC)}]
 
     await hass.services.async_call("climate", "set_temperature", {"entity_id": entity_id, "temperature": 22},
@@ -105,5 +111,5 @@ async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):
     air_conditioner.devices[AC]["name"] = "거실에어컨"
     entry = await setup(hass, air_conditioner)
     await eventually(hass, lambda: climate_entity(hass))
-    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    devices = appliances(hass, entry)
     assert [d.name for d in devices] == ["거실에어컨"]

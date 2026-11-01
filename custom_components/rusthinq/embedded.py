@@ -32,6 +32,8 @@ from pathlib import Path
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from awesomeversion import AwesomeVersion
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.requirements import async_process_requirements
 
@@ -54,6 +56,26 @@ _LEVELS = {"ERROR": logging.ERROR, "WARN": logging.WARNING, "INFO": logging.INFO
 
 class DaemonError(HomeAssistantError):
     """The daemon could not be prepared or started."""
+
+
+class PortsUnavailable(DaemonError):
+    """Listener ports the daemon needs are taken or not allowed; the user has to act (a Repairs issue says so)."""
+
+    def __init__(self, problems: list[str]) -> None:
+        super().__init__("; ".join(problems))
+        self.problems = problems
+
+
+def ports_issue(hass: HomeAssistant, problems: list[str] | None) -> None:
+    """Raise the Repairs issue for unusable ports, or clear it (`problems` None)."""
+    if problems is None:
+        ir.async_delete_issue(hass, DOMAIN, "ports_unavailable")
+        return
+    ir.async_create_issue(
+        hass, DOMAIN, "ports_unavailable", is_fixable=False, severity=ir.IssueSeverity.ERROR,
+        translation_key="ports_unavailable", translation_placeholders={"problems": "; ".join(problems)},
+        learn_more_url="https://github.com/3735943886/rusthinq-homeassistant#ports",
+    )
 
 
 def data_dir(hass: HomeAssistant) -> Path:
@@ -310,6 +332,7 @@ class EmbeddedDaemon:
             _LOGGER.warning("could not install %s (%s); using the binaries copied last time", REQUIREMENT, err)
         await self._hass.async_add_executor_job(self._prepare_files, package_bin)
         self.version = await self._binary_version()
+        await self._hass.async_add_executor_job(self._note_version)
         if not (self._dir / "scripts").is_dir():
             await self._download_scripts()
         self.management_port = await self._hass.async_add_executor_job(free_local_port)
@@ -330,7 +353,19 @@ class EmbeddedDaemon:
         ensure_ca(self._dir)
         stop_orphan(self.pidfile, self.config_path)
         if problems := busy_ports(self._ports):
-            raise DaemonError("; ".join(problems))
+            raise PortsUnavailable(problems)
+
+    def _note_version(self) -> None:
+        """Warn when the binary is older than the one that last ran on this data: rusthinq does not promise that its
+        files read back after a downgrade."""
+        marker = self._dir / ".last-version"
+        with contextlib.suppress(OSError):
+            last = marker.read_text().strip()
+            if last and self.version and AwesomeVersion(self.version) < AwesomeVersion(last):
+                _LOGGER.warning("rusthinq %s runs on data last used by %s; downgrades are not guaranteed to keep it "
+                                "readable", self.version, last)
+        if self.version:
+            _write(marker, f"{self.version}\n".encode(), 0o644)
 
     async def _binary_version(self) -> str | None:
         with contextlib.suppress(OSError, TimeoutError):
@@ -425,14 +460,17 @@ class EmbeddedDaemon:
             try:
                 await self._hass.async_add_executor_job(self._check_ports)
                 problem = await self._spawn_until_ready()
-            except DaemonError as err:
+            except PortsUnavailable as err:
+                ports_issue(self._hass, err.problems)
                 problem = str(err)
             if problem:
                 _LOGGER.error("rusthinq did not restart: %s", problem)
+            else:
+                ports_issue(self._hass, None)
 
     def _check_ports(self) -> None:
         if problems := busy_ports(self._ports):
-            raise DaemonError("; ".join(problems))
+            raise PortsUnavailable(problems)
 
     async def _terminate(self) -> None:
         proc = self._proc

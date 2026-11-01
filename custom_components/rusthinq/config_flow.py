@@ -2,6 +2,9 @@
 (`migrate.py`), or connects to a running one (development).
 
 There is one embedded entry per Home Assistant. Its ports are checked here, before anything is written.
+
+The options flow signs the daemon in to LG and out again, as the rusthinq dashboard does: rusthinq returns LG's sign-in
+address, the user signs in in a browser and pastes the address it ends on (`login/iabClose`).
 """
 
 from __future__ import annotations
@@ -10,14 +13,15 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.core import callback
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import FileSelector, FileSelectorConfig
 
 from . import daemon_ports, management_headers, migrate
-from .client import REQUEST_TIMEOUT
+from .client import REQUEST_TIMEOUT, ManagementError
 from .const import (
     CONF_ARCHIVE,
     CONF_HTTPS_PORT,
@@ -42,6 +46,11 @@ STEP_MIGRATE = "migrate"
 
 class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return LgAccountFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         # Home Assistant's advanced mode is deprecated (2026.9), so the development entry cannot be hidden behind it;
@@ -159,3 +168,90 @@ def _read_upload(hass, file_id: str) -> migrate.Imported:
     except (ValueError, OSError) as err:
         raise migrate.MigrateError(f"the upload cannot be read: {err}") from err
     return migrate.read_export(archive)
+
+
+COUNTRY = vol.All(str, vol.Strip, vol.Upper, vol.Match(r"^[A-Z]{2}$"))
+
+
+class LgAccountFlow(OptionsFlow):
+    """Sign the daemon in to LG, out, or in again with the saved credentials."""
+
+    def __init__(self) -> None:
+        self._sign_in_url = ""
+
+    @property
+    def _client(self):
+        return self.config_entry.runtime_data.client
+
+    def _done(self) -> ConfigFlowResult:
+        return self.async_create_entry(data=dict(self.config_entry.options))
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if self.config_entry.state is not ConfigEntryState.LOADED or not self._client.connected.is_set():
+            return self.async_abort(reason="not_running")
+        if not self._client.features.get("bridge"):
+            return self.async_abort(reason="no_bridge")
+        account = self._client.account
+        signed_in = bool(account.get("loggedIn"))
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["logout", "refresh"] if signed_in else ["login"],
+            description_placeholders={
+                "state": f"signed in ({account.get('country') or '?'})" if signed_in else "not signed in",
+                "error": account.get("error") or "none",
+            },
+        )
+
+    async def async_step_login(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders = {"problem": ""}
+        if user_input is not None:
+            try:
+                self._sign_in_url = await self._client.cloud_login(user_input["country"])
+            except ManagementError as err:
+                errors["base"] = "cloud_failed"
+                placeholders["problem"] = str(err)
+            else:
+                return await self.async_step_login_complete()
+        default = self._client.account.get("country") or self.hass.config.country or "KR"
+        return self.async_show_form(
+            step_id="login", data_schema=vol.Schema({vol.Required("country", default=default): COUNTRY}),
+            errors=errors, description_placeholders=placeholders,
+        )
+
+    async def async_step_login_complete(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders = {"sign_in_url": self._sign_in_url, "problem": ""}
+        if user_input is not None:
+            try:
+                await self._client.cloud_complete(user_input["url"].strip())
+            except ManagementError as err:
+                errors["base"] = "cloud_failed"
+                placeholders["problem"] = str(err)
+            else:
+                return self._done()
+        return self.async_show_form(
+            step_id="login_complete", data_schema=vol.Schema({vol.Required("url"): str}), errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_logout(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        placeholders = {"problem": ""}
+        if user_input is not None:
+            try:
+                await self._client.cloud_logout()
+            except ManagementError as err:
+                errors["base"] = "cloud_failed"
+                placeholders["problem"] = str(err)
+            else:
+                return self._done()
+        return self.async_show_form(step_id="logout", data_schema=vol.Schema({}), errors=errors,
+                                    description_placeholders=placeholders)
+
+    async def async_step_refresh(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        try:
+            await self._client.cloud_refresh()
+        except ManagementError as err:
+            return self.async_abort(reason="cloud_failed", description_placeholders={"problem": str(err)})
+        return self._done()

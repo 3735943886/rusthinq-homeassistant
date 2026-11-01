@@ -14,30 +14,16 @@ from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import RusthinqConfigEntry, scripts
-from .const import DOMAIN
 from .embedded import data_dir
+from .status import service_device
 
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(hours=6)
 PARALLEL_UPDATES = 1
-
-
-def daemon_device(entry: RusthinqConfigEntry) -> DeviceInfo:
-    daemon = entry.runtime_data.daemon
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name="rusthinq",
-        manufacturer="rusthinq",
-        model="Embedded daemon",
-        sw_version=daemon.version if daemon else None,
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://github.com/3735943886/rusthinq",
-    )
 
 
 async def async_setup_entry(
@@ -60,7 +46,7 @@ class ScriptsUpdate(UpdateEntity):
     def __init__(self, entry: RusthinqConfigEntry) -> None:
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}-scripts"
-        self._attr_device_info = daemon_device(entry)
+        self._attr_device_info = service_device(entry)
         self._installed: str | None = None
         self._latest: str | None = None
 

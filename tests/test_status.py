@@ -70,6 +70,8 @@ async def test_each_device_shows_its_connection_bridge_driver_and_firmware(hass,
 async def test_a_connection_event_rereads_the_status(hass, air_conditioner):
     await setup(hass, air_conditioner)
     await eventually(hass, lambda: state(hass, AC, "local") and state(hass, AC, "local").state == STATE_ON)
+    await eventually(hass, lambda: air_conditioner.device_reads)  # the read after connecting, for the LG account
+    await asyncio.sleep(0.1)
     reads = air_conditioner.device_reads
     await air_conditioner.send({"type": "stateChanged", "device": AC, "cloudBound": "{}"})
     await asyncio.sleep(0.2)

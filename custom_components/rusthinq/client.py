@@ -49,6 +49,10 @@ def basic_authorization(user: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Basic {token}"}
 
 
+class ManagementError(Exception):
+    """The management API refused or failed a request; the message is its reason."""
+
+
 @dataclass(frozen=True)
 class Session:
     """What rusthinq needs to address a device's current connection and driver."""
@@ -103,6 +107,8 @@ class ManagementClient:
         self.devices: dict[str, dict[str, Any]] = {}
         """Each device as `/api/devices` describes it (online, bridge, driver, firmware...), by id."""
         self.features: dict[str, Any] = {}
+        self.account: dict[str, Any] = {}
+        """The LG account as `/api/cloud` reports it (`loggedIn`, `country`, `error`, `busy`); empty without a bridge."""
         self._descriptors: dict[str, tuple[str, dict[str, Any], bool]] = {}
         """The last descriptor each device's driver published, as published: (topic, document, retain)."""
         self._labels: dict[str, str | None] = {}
@@ -188,7 +194,7 @@ class ManagementClient:
                 await self._presence(True)
             await self._set_devices(state)
             self._start_resync(state)
-            self._schedule_status(STATUS_INTERVAL)
+            self._schedule_status(STATUS_SETTLE)  # the LG account is not in the snapshot
         elif kind in STATUS_EVENTS and "cloudBound" not in event:
             self._schedule_status(STATUS_SETTLE)
         elif kind == "scriptOutput":
@@ -258,9 +264,70 @@ class ManagementClient:
                 self._sessions[device] = session
             else:
                 self._sessions.pop(device, None)
+        if (state.get("features") or {}).get("bridge"):
+            self.account = await self._account()
         if self.connected.is_set():
             await self._set_devices(state)
         return state
+
+    async def _account(self) -> dict[str, Any]:
+        try:
+            async with self._http.get(
+                f"{self._url}/api/cloud", headers=self._headers, timeout=REQUEST_TIMEOUT
+            ) as response:
+                response.raise_for_status()
+                return (await response.json()).get("account") or {}
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            _LOGGER.warning("could not read the LG account status: %s", err)
+            return self.account
+
+    # ---- LG account and bridge -----------------------------------------------------------
+
+    async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            async with self._http.post(
+                f"{self._url}{path}", json=body, headers=self._headers, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
+                try:
+                    answer = await response.json(content_type=None)
+                except ValueError:
+                    answer = {}
+                if response.status >= 400:
+                    raise ManagementError((answer or {}).get("error") or f"HTTP {response.status}")
+                return answer if isinstance(answer, dict) else {}
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise ManagementError(str(err)) from err
+        finally:
+            if self.connected.is_set():
+                self._schedule_status(STATUS_SETTLE)
+
+    async def cloud_login(self, country: str) -> str:
+        """Start an LG sign-in; the URL to open in a browser."""
+        url = (await self._post("/api/cloud/login", {"country": country})).get("url")
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise ManagementError("LG returned no sign-in address")
+        return url
+
+    async def cloud_complete(self, url: str) -> None:
+        """Finish the sign-in with the address the browser ended on (LG's `login/iabClose`)."""
+        await self._post("/api/cloud/login/complete", {"url": url})
+
+    async def cloud_logout(self) -> None:
+        await self._post("/api/cloud/logout", {})
+
+    async def cloud_refresh(self) -> None:
+        await self._post("/api/cloud/refresh", {})
+
+    async def bridge(self, device: str, action: str) -> None:
+        """`pair`, `enable`, `disable` or `unpair` the LG bridge of a device, in its current incarnation. A pair
+        registers it under rusthinq's name for it, when there is one."""
+        info = self.devices.get(device) or {}
+        if info.get("incarnation") is None:
+            raise ManagementError(f"{device} is not known to rusthinq")
+        body: dict[str, Any] = {"incarnation": str(info["incarnation"])}
+        if action == "pair" and info.get("name"):
+            body["alias"] = info["name"]
+        await self._post(f"/api/devices/{device}/bridge/{action}", body)
 
     def _start_resync(self, state: dict[str, Any]) -> None:
         """Republish every online device's current publications, as a broker would replay retained ones."""
