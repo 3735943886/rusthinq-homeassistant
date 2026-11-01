@@ -94,4 +94,7 @@ Entities are unavailable while the daemon is not running.
 
 The daemon binaries are published on PyPI as [`rusthinq`](https://pypi.org/project/rusthinq/), built from rusthinq's
 releases by this repository (see [wheel/README.md](wheel/README.md)); they can be used outside Home Assistant too.
-rusthinq is licensed under GPL-2.0-or-later.
+
+## License
+
+GPL-2.0-or-later, like rusthinq ([LICENSE](LICENSE)).
