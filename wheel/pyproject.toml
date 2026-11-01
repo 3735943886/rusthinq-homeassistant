@@ -1,0 +1,30 @@
+# Wraps the rusthinq release binaries (musl static-pie) in platform wheels. Nothing is compiled:
+# build.sh verifies the release tarballs, puts rusthinq and rusthinqctl into rusthinq/bin/, builds, and
+# retags the wheel py3-none-<musllinux+manylinux> with `wheel tags`.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rusthinq"
+dynamic = ["version"]
+description = "Prebuilt rusthinq binaries (local server for LG ThinQ appliances)"
+readme = "README.md"
+license = "GPL-2.0-or-later"
+license-files = ["COPYING"]
+requires-python = ">=3.10"
+
+[project.urls]
+Homepage = "https://github.com/3735943886/rusthinq"
+Source = "https://github.com/3735943886/rusthinq"
+Packaging = "https://github.com/3735943886/rusthinq-homeassistant"
+
+[tool.setuptools]
+packages = ["rusthinq"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+rusthinq = ["bin/rusthinq", "bin/rusthinqctl"]
+
+[tool.setuptools.dynamic]
+version = { attr = "rusthinq.__version__" }

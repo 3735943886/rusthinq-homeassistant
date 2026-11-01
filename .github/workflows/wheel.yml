@@ -1,0 +1,115 @@
+name: Wheel
+
+# Wraps the Linux binaries (musl static-pie) of a rusthinq GitHub release unchanged in wheels and uploads them
+# to PyPI `rusthinq`. No Rust build: the release tarballs are verified against SHA256SUMS and packaged by
+# wheel/build.sh. amd64/aarch64 only, since HA dropped 32-bit support.
+# Auth is Trusted Publishing (this repo + this workflow + environment `testpypi`/`pypi` registered on each index);
+# no token secret. Check a new release with index=testpypi first, then run again with pypi. PyPI never accepts the
+# same version twice, so repackaging an uploaded version needs `post`.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "rusthinq release tag (e.g. v0.2.0-rc8)"
+        required: true
+        type: string
+      post:
+        description: "Repackaging number for the same binaries (.postN); empty for none"
+        required: false
+        type: string
+      index:
+        description: "Index to upload to"
+        required: true
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$TAG" --repo 3735943886/rusthinq --dir assets \
+            --pattern SHA256SUMS --pattern "rusthinq-$TAG-linux-*.tar.gz"
+
+      - name: Build wheels
+        env:
+          TAG: ${{ inputs.tag }}
+          POST: ${{ inputs.post }}
+        run: |
+          python -m pip install --quiet build wheel packaging
+          wheel/build.sh "$TAG" assets dist "$POST"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels
+          path: dist/*.whl
+          if-no-files-found: error
+
+  smoke:
+    # Install and run on each architecture with both glibc (runner Python) and musl (Alpine, like the HA container).
+    needs: build
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheels
+          path: dist
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: glibc
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --no-index --find-links dist rusthinq
+          /tmp/venv/bin/python -c "$CHECK"
+        env:
+          CHECK: &check |
+            import subprocess, rusthinq
+            print(rusthinq.__version__, rusthinq.RUSTHINQ_TAG)
+            out = subprocess.run([rusthinq.binary_path(), "--version"], capture_output=True, text=True, check=True).stdout
+            assert out.strip() == "rusthinq " + rusthinq.RUSTHINQ_TAG.removeprefix("v"), out
+            subprocess.run([rusthinq.binary_path("rusthinqctl"), "--help"], capture_output=True, check=True)
+
+      - name: musl
+        env:
+          CHECK: *check
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" -e CHECK python:3.13-alpine sh -ec '
+            pip install --quiet --root-user-action=ignore --no-index --find-links /dist rusthinq
+            python -c "$CHECK"'
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.index }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheels
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          repository-url: ${{ inputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
