@@ -19,16 +19,33 @@ class FakeRusthinq:
         """When set to an unset Event, presentations wait for it (to interleave live events)."""
         self.sockets: list[web.WebSocketResponse] = []
         self.connections = 0
+        self.device_reads = 0
         self._runner: web.AppRunner | None = None
         self.url = ""
 
     def add_device(self, device: str, publications: list[dict[str, Any]], *, incarnation: int = 1,
-                   generation: int = 100, script_generation: int = 1, online: bool = True) -> None:
+                   generation: int = 100, script_generation: int = 1, online: bool = True, mapped: bool = True,
+                   **fields: Any) -> None:
+        """A device as `/api/devices` lists it; `fields` override the status fields (names as rusthinq's)."""
         self.devices[device] = {
             "online": online,
             "incarnation": str(incarnation),
             "generation": str(generation) if online else None,
-            "scriptGeneration": str(script_generation) if online else None,
+            "scriptGeneration": str(script_generation) if online and mapped else None,
+            "mapped": online and mapped,
+            "scriptFaulted": False,
+            "name": None,
+            "model": "CST_570004_WW",
+            "modelName": "CST_570004_WW",
+            "swVersion": "570004",
+            "platform": "ThinQ2",
+            "driver": {"file": "drivers/CST_570004_WW.rhai"} if mapped else None,
+            "bridgeEnabled": True,
+            "bridgePaired": True,
+            "bridgePending": False,
+            "bridged": True,
+            "bridgeError": None,
+            **fields,
         }
         self.publications[device] = publications
 
@@ -43,7 +60,8 @@ class FakeRusthinq:
                 "scriptGeneration": info["scriptGeneration"]}
 
     def state(self) -> dict[str, Any]:
-        return {"devices": self.devices, "version": "0.2.0-rc8", "management": True}
+        return {"devices": self.devices, "version": "0.2.0-rc8", "management": True,
+                "features": {"bridge": True, "scripting": True}}
 
     async def output(self, device: str, topic: str, payload: str, retain: bool = True) -> None:
         """A driver publication, as rusthinq sends it on `/api/events`."""
@@ -98,6 +116,7 @@ class FakeRusthinq:
         return ws
 
     async def _devices(self, request: web.Request) -> web.Response:
+        self.device_reads += 1
         return web.json_response(self.state())
 
     async def _presentation(self, request: web.Request) -> web.Response:

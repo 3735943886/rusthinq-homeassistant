@@ -32,6 +32,7 @@ from .const import (
     MODE_EMBEDDED,
 )
 from .embedded import DaemonError, EmbeddedDaemon
+from .status import DeviceStatus
 
 if TYPE_CHECKING:
     from custom_components.ildevice.hub import IlHub
@@ -42,6 +43,7 @@ class RusthinqData:
     hub: IlHub
     client: ManagementClient
     daemon: EmbeddedDaemon | None
+    status: DeviceStatus
 
 
 type RusthinqConfigEntry = ConfigEntry[RusthinqData]
@@ -89,7 +91,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     # the ildevice domain, not this one).
     hub = build_hub(hass, {CONF_IL_PREFIX: prefix, CONF_AUTO_ADD: True}, transport, DOMAIN, entry.entry_id)
     client = ManagementClient(async_get_clientsession(hass), url, transport, prefix, headers=headers)
-    entry.runtime_data = RusthinqData(hub, client, daemon)
+    status = DeviceStatus(hass, entry, client)
+    entry.async_on_unload(status.start())
+    entry.runtime_data = RusthinqData(hub, client, daemon, status)
     await hass.config_entries.async_forward_entry_setups(entry, ENTRY_PLATFORMS)
     await hub.async_start()
     await client.start()

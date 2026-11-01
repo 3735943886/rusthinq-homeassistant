@@ -14,6 +14,7 @@ import base64
 import contextlib
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +30,13 @@ SOURCE = "rusthinq"
 
 RECONNECT_BACKOFF = (1, 5, 15, 30, 60)
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
+STATUS_SETTLE = 1.0
+"""Seconds to let a burst of connection events settle before re-reading the devices."""
+STATUS_INTERVAL = 300
+"""Seconds between device re-reads without events (bridge errors, for one, change without any)."""
+STATUS_EVENTS = ("stateChanged", "scriptStopped", "metadata")
+"""Events after which the devices' status may differ. `stateChanged` with `cloudBound` is a device's uplink, the
+most frequent event, and changes no status."""
 
 
 def basic_authorization(user: str, password: str) -> dict[str, str]:
@@ -84,7 +92,22 @@ class ManagementClient:
         self._runner: asyncio.Task | None = None
         self._commands: set[asyncio.Task] = set()
         self._unsubscribe: Unsubscribe | None = None
+        self._status: asyncio.Task | None = None
+        self._status_due = 0.0
+        self._listeners: list[Callable[[], None]] = []
         self.connected = asyncio.Event()
+        self.devices: dict[str, dict[str, Any]] = {}
+        """Each device as `/api/devices` describes it (online, bridge, driver, firmware...), by id."""
+        self.features: dict[str, Any] = {}
+
+    def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Call `listener` when `devices`, `features` or `connected` change; returns the function that removes it."""
+        self._listeners.append(listener)
+        return lambda: self._listeners.remove(listener)
+
+    def _changed(self) -> None:
+        for listener in list(self._listeners):
+            listener()
 
     @property
     def presence_topic(self) -> str:
@@ -99,13 +122,13 @@ class ManagementClient:
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
-        tasks = [t for t in (self._runner, self._resync, *self._commands) if t is not None]
+        tasks = [t for t in (self._runner, self._resync, self._status, *self._commands) if t is not None]
         for task in tasks:
             task.cancel()
         for task in tasks:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
-        self._runner = self._resync = None
+        self._runner = self._resync = self._status = None
         await self._presence(False)
 
     # ---- events --------------------------------------------------------------------------
@@ -138,19 +161,28 @@ class ManagementClient:
             self._resync = None
         self._live = None
         self._sessions.clear()
+        if self._status is not None:
+            self._status.cancel()
+            self._status = None
         if self.connected.is_set():
             self.connected.clear()
             await self._presence(False)
+            self._changed()
 
     async def _handle(self, event: dict[str, Any]) -> None:
         kind = event.get("type")
         if kind in ("snapshot", "lost"):
             if kind == "lost":
                 _LOGGER.warning("rusthinq dropped %s events; resynchronizing", event.get("events"))
-            self._start_resync(event.get("state") or {})
+            state = event.get("state") or {}
+            self._start_resync(state)
             if not self.connected.is_set():
                 self.connected.set()
                 await self._presence(True)
+            self._set_devices(state)
+            self._schedule_status(STATUS_INTERVAL)
+        elif kind in STATUS_EVENTS and "cloudBound" not in event:
+            self._schedule_status(STATUS_SETTLE)
         elif kind == "scriptOutput":
             context = event.get("context") or {}
             if (device := context.get("device")) and (session := Session.from_context(context)):
@@ -163,6 +195,49 @@ class ManagementClient:
             if self._live is not None and device:
                 self._live.setdefault(device, set()).add(publication.get("topic"))
             await self._publish(publication)
+
+    def _set_devices(self, state: dict[str, Any]) -> None:
+        self.devices = dict(state.get("devices") or {})
+        self.features = dict(state.get("features") or {})
+        self._changed()
+
+    def _schedule_status(self, delay: float) -> None:
+        """Re-read the devices after `delay`, or sooner if already due; then again after `STATUS_INTERVAL`."""
+        loop = asyncio.get_running_loop()
+        due = loop.time() + delay
+        if self._status is not None and not self._status.done():
+            if self._status_due <= due:
+                return
+            self._status.cancel()
+        self._status = asyncio.create_task(self._status_after(delay), name="rusthinq device status")
+        self._status_due = due
+
+    async def _status_after(self, delay: float) -> None:
+        await asyncio.sleep(delay)
+        await self._read_devices()
+        if self.connected.is_set():
+            self._status = None
+            self._schedule_status(STATUS_INTERVAL)
+
+    async def _read_devices(self) -> dict[str, Any] | None:
+        """`/api/devices`, which also refreshes `devices`, `features` and the sessions; None if it failed."""
+        try:
+            async with self._http.get(
+                f"{self._url}/api/devices", headers=self._headers, timeout=REQUEST_TIMEOUT
+            ) as response:
+                response.raise_for_status()
+                state = await response.json()
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            _LOGGER.warning("could not read rusthinq devices: %s", err)
+            return None
+        for device, info in (state.get("devices") or {}).items():
+            if (session := Session.from_device(info)) is not None:
+                self._sessions[device] = session
+            else:
+                self._sessions.pop(device, None)
+        if self.connected.is_set():
+            self._set_devices(state)
+        return state
 
     def _start_resync(self, state: dict[str, Any]) -> None:
         """Republish every online device's current publications, as a broker would replay retained ones."""
@@ -268,18 +343,6 @@ class ManagementClient:
             return 0, str(err)
 
     async def _refresh_session(self, device: str) -> Session | None:
-        try:
-            async with self._http.get(
-                f"{self._url}/api/devices", headers=self._headers, timeout=REQUEST_TIMEOUT
-            ) as response:
-                response.raise_for_status()
-                devices = (await response.json()).get("devices") or {}
-        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            _LOGGER.warning("could not read rusthinq devices: %s", err)
+        if await self._read_devices() is None:
             return None
-        session = Session.from_device(devices.get(device) or {})
-        if session is None:
-            self._sessions.pop(device, None)
-        else:
-            self._sessions[device] = session
-        return session
+        return self._sessions.get(device)
