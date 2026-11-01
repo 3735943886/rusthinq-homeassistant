@@ -81,7 +81,8 @@ take the names they have in the LG ThinQ app, and each device's LG bridge keeps 
 - **rusthinq** (a service device): *LG account*, and *Drivers*, an update entity that installs the latest
   rusthinq-scripts; the daemon reloads them without restarting.
 
-Entities are unavailable while the daemon is not running.
+Entities are unavailable while the daemon is not running. An appliance that is off (a washer leaves Wi-Fi when switched
+off) keeps its entities across Home Assistant restarts, unavailable until it connects again.
 
 ## Troubleshooting
 

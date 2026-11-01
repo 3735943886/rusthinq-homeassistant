@@ -33,6 +33,7 @@ from .const import (
     MODE_EMBEDDED,
 )
 from .embedded import DaemonError, EmbeddedDaemon, PortsUnavailable, ports_issue
+from .retained import RetainedStore
 from .status import DeviceStatus
 
 if TYPE_CHECKING:
@@ -95,7 +96,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     # Every device of a rusthinq is the user's own appliance: add it, never offer it (ildevice's offers would go to
     # the ildevice domain, not this one).
     hub = build_hub(hass, {CONF_IL_PREFIX: prefix, CONF_AUTO_ADD: True}, transport, DOMAIN, entry.entry_id)
+    retained = RetainedStore(hass, entry.entry_id, transport, prefix)
+    await retained.async_restore()
     client = ManagementClient(async_get_clientsession(hass), url, transport, prefix, headers=headers)
+    entry.async_on_unload(await retained.start(client))
     status = DeviceStatus(hass, entry, client)
     entry.async_on_unload(status.start())
     entry.runtime_data = RusthinqData(hub, client, daemon, status)
@@ -114,3 +118,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) ->
     if data.daemon is not None:
         await data.daemon.async_stop()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> None:
+    await RetainedStore.async_remove(hass, entry.entry_id)
