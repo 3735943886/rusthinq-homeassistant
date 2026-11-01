@@ -105,6 +105,8 @@ async def test_url_config_flow(hass, rusthinq):
     )
     assert done["type"] == "create_entry"
     assert done["data"] == {CONF_MODE: MODE_URL, CONF_URL: rusthinq.url, CONF_PREFIX: "rusthinq"}
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(done["result"].entry_id)
 
 
 async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):

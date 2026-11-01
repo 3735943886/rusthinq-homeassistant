@@ -59,6 +59,19 @@ def service_device(entry: RusthinqConfigEntry) -> DeviceInfo:
     )
 
 
+def _device_info(client: ManagementClient, device: str) -> DeviceInfo:
+    """The device as the ildevice entities describe it (name, vendor and model from its descriptor), so neither
+    overwrites the other; rusthinq's own data for a device without a descriptor (no driver)."""
+    info = client.devices.get(device) or {}
+    model = info.get("modelName") or info.get("model") or None
+    if (desc := client.descriptor(device)) is not None:
+        return DeviceInfo(identifiers={(DOMAIN, device)},
+                          name=desc.get("label") or desc.get("model") or device,
+                          manufacturer=desc.get("vendor"), model=desc.get("model"))
+    return DeviceInfo(identifiers={(DOMAIN, device)}, name=info.get("name") or model or device, manufacturer="LG",
+                      model=model)
+
+
 class DeviceStatus:
     """Creates the status entities of each device as it first appears, and tells them when anything changed."""
 
@@ -121,13 +134,7 @@ class StatusEntity(Entity):
         self._status = status
         self._device = device
         self._attr_unique_id = f"{device}-rusthinq-{self.key}"
-        info = status.client.devices.get(device) or {}
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device)},
-            default_name=info.get("name") or info.get("modelName") or info.get("model") or device,
-            default_manufacturer="LG",
-            default_model=info.get("modelName") or info.get("model") or None,
-        )
+        self._attr_device_info = _device_info(status.client, device)
 
     @property
     def info(self) -> dict[str, Any]:

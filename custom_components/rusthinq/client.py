@@ -230,6 +230,22 @@ class ManagementClient:
             return parts[0] if parts[0] and not parts[0].startswith("_") else None
         return None
 
+    def descriptor(self, device: str) -> dict[str, Any] | None:
+        """The device's descriptor as passed on (with rusthinq's name as its label), or as the transport retains it
+        (restored from before a restart); None if it has none."""
+        if (known := self._descriptors.get(device)) is not None:
+            name = self._labels.get(device)
+            return {**known[1], "label": name} if name else known[1]
+        retained = getattr(self._transport, "retained", {})
+        for topic in (f"{self._prefix}/{device}/descriptor", f"{self._prefix}/{device}"):
+            if (msg := retained.get(topic)) is not None:
+                try:
+                    document = json.loads(msg.payload)
+                except ValueError:
+                    return None
+                return document if isinstance(document, dict) else None
+        return None
+
     def _schedule_status(self, delay: float) -> None:
         """Re-read the devices after `delay`, or sooner if already due; then again after `STATUS_INTERVAL`."""
         loop = asyncio.get_running_loop()
