@@ -144,5 +144,16 @@
       "no_bridge": "This rusthinq has no LG bridge.",
       "cloud_failed": "rusthinq could not do that: {problem}"
     }
+  },
+  "exceptions": {
+    "not_connected": {
+      "message": "rusthinq is not reachable right now; try again once it is."
+    },
+    "device_online": {
+      "message": "{name} is connected to rusthinq and would come right back. Switch it off or take it off the network first, then delete it."
+    },
+    "forget_failed": {
+      "message": "rusthinq could not forget {name}: {error}"
+    }
   }
 }

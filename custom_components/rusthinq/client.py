@@ -345,6 +345,48 @@ class ManagementClient:
             body["alias"] = info["name"]
         await self._post(f"/api/devices/{device}/bridge/{action}", body)
 
+    async def forget(self, device: str) -> None:
+        """Forget a device in its current incarnation: rusthinq closes its session, deregisters it from LG when it is
+        bridged and drops it from its ledger (202: admitted). An appliance that connects again comes back."""
+        info = self.devices.get(device) or {}
+        if info.get("incarnation") is None:
+            raise ManagementError(f"{device} is not known to rusthinq")
+        await self._post(f"/api/devices/{device}/forget", {"incarnation": str(info["incarnation"])})
+
+    def retained_topics(self, device: str) -> list[str]:
+        """The topics the transport retains for a device (its descriptor first)."""
+        retained = getattr(self._transport, "retained", {})
+        base = f"{self._prefix}/{device}"
+        return sorted((t for t in retained if t == base or t.startswith(f"{base}/")),
+                      key=lambda t: (self._descriptor_of(t) is None, t))
+
+    def retained_values(self, device: str) -> dict[str, str]:
+        """What the transport retains for a device, by topic."""
+        retained = getattr(self._transport, "retained", {})
+        return {topic: (payload.decode("utf-8", "replace") if isinstance(payload := retained[topic].payload, bytes)
+                        else payload) for topic in self.retained_topics(device)}
+
+    async def clear(self, device: str) -> None:
+        """Clear what the transport retains for a device, as a broker's retained topics are cleared; the IL consumer
+        then withdraws the device."""
+        for topic in self.retained_topics(device):
+            await self._transport.publish(topic, "", qos=1, retain=True)
+        self._descriptors.pop(device, None)
+        self._labels.pop(device, None)
+        self._sessions.pop(device, None)
+
+    async def diagnostics(self) -> dict[str, Any]:
+        """`/api/diagnostics`: versions, runtime, devices and drivers; rusthinq leaves out credentials and payloads."""
+        try:
+            async with self._http.get(
+                f"{self._url}/api/diagnostics", headers=self._headers, timeout=REQUEST_TIMEOUT
+            ) as response:
+                response.raise_for_status()
+                answer = await response.json()
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise ManagementError(str(err)) from err
+        return answer if isinstance(answer, dict) else {}
+
     def _start_resync(self, state: dict[str, Any]) -> None:
         """Republish every online device's current publications, as a broker would replay retained ones."""
         sessions = {

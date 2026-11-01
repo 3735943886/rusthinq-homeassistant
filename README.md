@@ -94,6 +94,13 @@ take the names they have in the LG ThinQ app, and each device's LG bridge keeps 
 Entities are unavailable while the daemon is not running. An appliance that is off (a washer leaves Wi-Fi when switched
 off) keeps its entities across Home Assistant restarts, unavailable until it connects again.
 
+Deleting an appliance on its device page also forgets it in rusthinq (and deregisters it from LG when it is bridged).
+That is refused while it is connected, since it would come right back: switch it off or take it off the network
+first. An appliance that connects again later appears again.
+
+rusthinq's own dashboard is not exposed: its management API listens on 127.0.0.1 with credentials made at each start,
+and the integration covers what the dashboard offers for everyday use.
+
 ## Troubleshooting
 
 - The daemon's own log is the logger `custom_components.rusthinq.daemon`; the integration's is
@@ -102,6 +109,9 @@ off) keeps its entities across Home Assistant restarts, unavailable until it con
   event `ildevice_command_rejected` with the property, a code and the reason, and is logged.
 - A setup that keeps retrying shows its reason on the integration card (a port in use, for example).
 - If Home Assistant was killed, a daemon it left running is stopped on the next start.
+- *Download diagnostics* on the integration or on an appliance gives what to attach to an issue: rusthinq's own
+  diagnostics, the devices as rusthinq lists them, the daemon's last log lines, and per appliance its descriptor and
+  current values. Credentials are left out.
 
 ## The `rusthinq` package
 

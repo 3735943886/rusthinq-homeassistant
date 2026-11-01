@@ -29,6 +29,7 @@ class FakeRusthinq:
         """What `/api/backup` serves; None answers like a daemon older than 0.2.0 with its dashboard on."""
         self.backup_refusal: str | None = None
         """When set, `/api/backup` answers 403 with this (an unauthenticated, non-loopback management bind)."""
+        self.forgotten: list[tuple[str, dict[str, Any]]] = []
         self._runner: web.AppRunner | None = None
         self.url = ""
 
@@ -96,6 +97,8 @@ class FakeRusthinq:
         app.router.add_get("/api/cloud", self._cloud)
         app.router.add_post("/api/cloud/{action:login|login/complete|logout|refresh}", self._cloud_action)
         app.router.add_post("/api/devices/{id}/bridge/{action}", self._bridge)
+        app.router.add_post("/api/devices/{id}/forget", self._forget)
+        app.router.add_get("/api/diagnostics", self._diagnostics)
         app.router.add_get("/api/health", self._health)
         app.router.add_get("/api/backup", self._backup)
         self._runner = web.AppRunner(app)
@@ -109,6 +112,21 @@ class FakeRusthinq:
         await self.drop_sockets()
         if self._runner is not None:
             await self._runner.cleanup()
+
+    async def _forget(self, request: web.Request) -> web.Response:
+        device, body = request.match_info["id"], await request.json()
+        self.forgotten.append((device, body))
+        if (failure := self._failure()) is not None:
+            return failure
+        info = self.devices.get(device)
+        if info is None or body.get("incarnation") != info["incarnation"]:
+            return web.json_response({"error": "unknown device or stale incarnation"}, status=409)
+        del self.devices[device]
+        return web.json_response({"status": "accepted", "incarnation": body["incarnation"]}, status=202)
+
+    async def _diagnostics(self, request: web.Request) -> web.Response:
+        return web.json_response({"version": "0.2.0", "devices": self.devices,
+                                  "privacy": "No credentials, certificates or wire payloads are included."})
 
     async def _health(self, request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})

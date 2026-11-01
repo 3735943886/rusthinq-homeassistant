@@ -144,5 +144,16 @@
       "no_bridge": "이 rusthinq에는 LG 브리지가 없습니다.",
       "cloud_failed": "rusthinq가 처리하지 못했습니다: {problem}"
     }
+  },
+  "exceptions": {
+    "not_connected": {
+      "message": "지금 rusthinq에 연결할 수 없습니다. 연결되면 다시 시도하세요."
+    },
+    "device_online": {
+      "message": "{name}은(는) rusthinq에 연결되어 있어 지우면 바로 다시 나타납니다. 먼저 전원을 끄거나 네트워크에서 빼고 지우세요."
+    },
+    "forget_failed": {
+      "message": "rusthinq가 {name}을(를) 지우지 못했습니다: {error}"
+    }
   }
 }

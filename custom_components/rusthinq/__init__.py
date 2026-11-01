@@ -11,13 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceEntry
 
-from .client import ManagementClient, basic_authorization
+from .client import ManagementClient, ManagementError, basic_authorization
 from .const import (
     CONF_HTTPS_PORT,
     CONF_MODE,
@@ -118,6 +119,33 @@ async def async_unload_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) ->
     if data.daemon is not None:
         await data.daemon.async_stop()
     return unloaded
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: RusthinqConfigEntry, device_entry: DeviceEntry
+) -> bool:
+    """Deleting an appliance forgets it in rusthinq too, and clears what is retained of it. One that is connected
+    would come right back, so it is refused until the appliance is off or gone. The rusthinq device stays."""
+    devices = {ident for domain, ident in device_entry.identifiers if domain == DOMAIN}
+    if entry.entry_id in devices or entry.state is not ConfigEntryState.LOADED:
+        return False
+    client = entry.runtime_data.client
+    if not client.connected.is_set():
+        raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_connected")
+    name = device_entry.name_by_user or device_entry.name or ", ".join(sorted(devices))
+    for device in devices:
+        if (client.devices.get(device) or {}).get("online"):
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="device_online",
+                                     translation_placeholders={"name": name})
+    for device in devices:
+        if device in client.devices:
+            try:
+                await client.forget(device)
+            except ManagementError as err:
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="forget_failed",
+                                         translation_placeholders={"name": name, "error": str(err)}) from err
+        await client.clear(device)
+    return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> None:
