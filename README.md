@@ -94,9 +94,10 @@ take the names they have in the LG ThinQ app, and each device's LG bridge keeps 
 Entities are unavailable while the daemon is not running. An appliance that is off (a washer leaves Wi-Fi when switched
 off) keeps its entities across Home Assistant restarts, unavailable until it connects again.
 
-Deleting an appliance on its device page also forgets it in rusthinq (and deregisters it from LG when it is bridged).
-That is refused while it is connected, since it would come right back: switch it off or take it off the network
-first. An appliance that connects again later appears again.
+Deleting an appliance on its device page also forgets it in rusthinq. If it is paired with LG (*Pair with LG*), that
+also removes it from the LG account, even with the LG bridge switched off. That is refused while it is connected, since
+it would come right back: switch it off or take it off the network first. An appliance that connects again later
+appears again. An appliance that is merely offline is never forgotten.
 
 rusthinq's own dashboard is not exposed: its management API listens on 127.0.0.1 with credentials made at each start,
 and the integration covers what the dashboard offers for everyday use.
