@@ -10,6 +10,7 @@ rusthinq's own MQTT command path makes. Nothing here imports Home Assistant.
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import logging
@@ -28,6 +29,12 @@ SOURCE = "rusthinq"
 
 RECONNECT_BACKOFF = (1, 5, 15, 30, 60)
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+
+def basic_authorization(user: str, password: str) -> dict[str, str]:
+    """The `Authorization` header for the management API's Basic auth (aiohttp's `BasicAuth` is deprecated in 3.14)."""
+    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 
 @dataclass(frozen=True)
@@ -61,14 +68,14 @@ class ManagementClient:
         transport: Transport,
         prefix: str,
         *,
-        auth: aiohttp.BasicAuth | None = None,
+        headers: dict[str, str] | None = None,
         backoff: tuple[float, ...] = RECONNECT_BACKOFF,
     ) -> None:
         self._http = http
         self._url = url.rstrip("/")
         self._transport = transport
         self._prefix = prefix
-        self._auth = auth
+        self._headers = headers or {}
         self._backoff = backoff
         self._sessions: dict[str, Session] = {}
         self._live: dict[str, set[str]] | None = None
@@ -108,7 +115,7 @@ class ManagementClient:
         while True:
             try:
                 async with self._http.ws_connect(
-                    f"{self._url}/api/events", auth=self._auth, heartbeat=30, max_msg_size=0
+                    f"{self._url}/api/events", headers=self._headers, heartbeat=30, max_msg_size=0
                 ) as ws:
                     attempt = 0
                     async for msg in ws:
@@ -191,7 +198,7 @@ class ManagementClient:
         }
         try:
             async with self._http.get(
-                f"{self._url}/api/devices/{device}/presentation", params=params, auth=self._auth,
+                f"{self._url}/api/devices/{device}/presentation", params=params, headers=self._headers,
                 timeout=REQUEST_TIMEOUT,
             ) as response:
                 if response.status == 409:  # the device reconnected meanwhile; its new driver publishes live
@@ -254,7 +261,7 @@ class ManagementClient:
         }
         try:
             async with self._http.post(
-                f"{self._url}/api/devices/{device}/invoke", json=body, auth=self._auth, timeout=REQUEST_TIMEOUT
+                f"{self._url}/api/devices/{device}/invoke", json=body, headers=self._headers, timeout=REQUEST_TIMEOUT
             ) as response:
                 return response.status, (await response.text()).strip()
         except (aiohttp.ClientError, TimeoutError) as err:
@@ -263,7 +270,7 @@ class ManagementClient:
     async def _refresh_session(self, device: str) -> Session | None:
         try:
             async with self._http.get(
-                f"{self._url}/api/devices", auth=self._auth, timeout=REQUEST_TIMEOUT
+                f"{self._url}/api/devices", headers=self._headers, timeout=REQUEST_TIMEOUT
             ) as response:
                 response.raise_for_status()
                 devices = (await response.json()).get("devices") or {}

@@ -1,0 +1,179 @@
+"""The embedded daemon: the real rusthinq binary from the `rusthinq` wheel, on ephemeral ports in a temporary config
+directory. rusthinq-scripts is not downloaded (an empty drivers directory is put in its place), so no devices appear."""
+
+import asyncio
+import gzip
+import io
+import os
+import signal
+import socket
+import subprocess
+import tarfile
+from pathlib import Path
+
+import pytest
+from homeassistant.config_entries import ConfigEntryState
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.rusthinq import embedded
+from custom_components.rusthinq.const import (
+    CONF_HTTPS_PORT,
+    CONF_MODE,
+    CONF_MQTT_PORT,
+    CONF_PREFIX,
+    CONF_THINQ1_HTTPS_PORT,
+    CONF_THINQ1_PORT,
+    DOMAIN,
+    MODE_EMBEDDED,
+)
+
+EPHEMERAL = {CONF_HTTPS_PORT: 0, CONF_MQTT_PORT: 0, CONF_THINQ1_HTTPS_PORT: 0, CONF_THINQ1_PORT: 0}
+
+
+@pytest.fixture(autouse=True)
+def _custom(enable_custom_integrations, socket_enabled):
+    return
+
+
+@pytest.fixture
+def config_dir(hass, tmp_path) -> Path:
+    hass.config.config_dir = str(tmp_path)
+    (tmp_path / DOMAIN / "scripts" / "drivers").mkdir(parents=True)
+    return tmp_path / DOMAIN
+
+
+async def eventually(hass, check, timeout: float = 10) -> None:
+    async with asyncio.timeout(timeout):
+        while not check():
+            await asyncio.sleep(0.05)
+            await hass.async_block_till_done()
+
+
+def running(pid: int) -> bool:
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return False
+
+
+async def setup(hass, **ports) -> MockConfigEntry:
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED,
+                            data={CONF_MODE: MODE_EMBEDDED, CONF_PREFIX: "rusthinq", **EPHEMERAL, **ports})
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_the_daemon_runs_with_its_files_and_stops_with_the_entry(hass, config_dir):
+    entry = await setup(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    data = entry.runtime_data
+    await eventually(hass, data.client.connected.is_set)
+    pid = int((config_dir / "rusthinq.pid").read_text())
+    assert running(pid)
+    for name in ("ca.key", "ca.cert", "config.toml", "bin/rusthinq", "bin/rusthinqctl"):
+        assert (config_dir / name).is_file(), name
+    config = (config_dir / "config.toml").read_text()
+    assert "external_mqtt" not in config
+    assert f'bind = "127.0.0.1:{data.daemon.management_port}"' in config
+    assert oct((config_dir / "ca.key").stat().st_mode & 0o777) == "0o600"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert not running(pid)
+    assert not (config_dir / "rusthinq.pid").exists()
+
+
+async def test_a_port_in_use_is_named_and_retried(hass, config_dir):
+    with socket.socket() as taken:
+        taken.bind(("0.0.0.0", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        entry = await setup(hass, **{CONF_MQTT_PORT: port})
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+        assert entry.reason == f"port {port} (mqtt) is already in use"
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_crashed_daemon_is_restarted(hass, config_dir, monkeypatch):
+    monkeypatch.setattr(embedded, "RESTART_BACKOFF", (0.1,))
+    entry = await setup(hass)
+    client = entry.runtime_data.client
+    await eventually(hass, client.connected.is_set)
+    first = int((config_dir / "rusthinq.pid").read_text())
+    os.kill(first, signal.SIGKILL)
+    await eventually(hass, lambda: int((config_dir / "rusthinq.pid").read_text()) != first)
+    await eventually(hass, client.connected.is_set)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_daemon_left_by_a_previous_start_is_stopped(hass, config_dir):
+    entry = await setup(hass)
+    await eventually(hass, entry.runtime_data.client.connected.is_set)
+    config = entry.runtime_data.daemon.config_path
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    # what a Home Assistant killed with SIGKILL leaves behind: the daemon, still running and holding its files'
+    # locks, and its pidfile
+    orphan = subprocess.Popen([str(config_dir / "bin" / "rusthinq"), str(config)], stderr=subprocess.DEVNULL)
+    await asyncio.sleep(0.5)
+    (config_dir / "rusthinq.pid").write_text(f"{orphan.pid}\n")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert orphan.wait(timeout=5) == 0
+    assert entry.state is ConfigEntryState.LOADED
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+def test_half_a_ca_is_refused(tmp_path):
+    (tmp_path / "ca.key").write_text("x")
+    with pytest.raises(embedded.DaemonError, match="incomplete CA"):
+        embedded.ensure_ca(tmp_path)
+
+
+def test_an_https_port_behind_a_redirect_is_advertised_as_443():
+    common = dict(mqtt_port=8883, thinq1_https_port=46030, thinq1_port=47878, prefix="rusthinq",
+                  management_port=40000, user="u", password='p"w')
+    assert "https_advertise = 443" in embedded.render_config(https_port=8443, **common)
+    assert "https_advertise" not in embedded.render_config(https_port=443, **common)
+    assert 'password = "p\\"w"' in embedded.render_config(https_port=443, **common)
+
+
+def test_scripts_are_replaced_in_one_step(tmp_path):
+    def tarball(marker: str) -> bytes:
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as archive:
+            for name, data in ((f"rusthinq-scripts-master/drivers/{marker}.rhai", b"//"),):
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        return gzip.compress(buf.getvalue())
+
+    embedded.install_scripts(tmp_path, tarball("old"))
+    embedded.install_scripts(tmp_path, tarball("new"))
+    assert sorted(p.name for p in (tmp_path / "scripts" / "drivers").iterdir()) == ["new.rhai"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["scripts"]
+
+
+async def test_config_flow_checks_ports_and_allows_one_embedded_entry(hass, config_dir):
+    from homeassistant.setup import async_setup_component
+
+    await async_setup_component(hass, "ildevice", {})
+    with socket.socket() as taken:
+        taken.bind(("0.0.0.0", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": MODE_EMBEDDED})
+        assert result["step_id"] == "embedded"
+        bad = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_HTTPS_PORT: port, CONF_MQTT_PORT: port + 1 if port < 65535 else port - 1}
+        )
+    assert bad["errors"] == {"base": "ports_unavailable"}
+    assert f"port {port} (https) is already in use" in bad["description_placeholders"]["problems"]
+    hass.config_entries.flow.async_abort(result["flow_id"])
+
+    MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data={}).add_to_hass(hass)
+    menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    again = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": MODE_EMBEDDED})
+    assert again["type"] == "abort" and again["reason"] == "already_configured"

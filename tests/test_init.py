@@ -12,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.rusthinq.const import CONF_PREFIX, CONF_URL, DOMAIN, PLATFORMS
+from custom_components.rusthinq.const import CONF_MODE, CONF_PREFIX, CONF_URL, DOMAIN, MODE_URL, PLATFORMS
 
 
 @pytest.fixture(autouse=True)
@@ -86,9 +86,10 @@ async def test_unload(hass, air_conditioner):
     assert hass.states.get(climate_entity(hass)).state == STATE_UNAVAILABLE
 
 
-async def test_config_flow(hass, rusthinq):
+async def test_url_config_flow(hass, rusthinq):
     await async_setup_component(hass, "ildevice", {})
-    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": MODE_URL})
     bad = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_URL: "http://127.0.0.1:1", CONF_PREFIX: "rusthinq"}
     )
@@ -97,4 +98,4 @@ async def test_config_flow(hass, rusthinq):
         result["flow_id"], {CONF_URL: rusthinq.url + "/", CONF_PREFIX: "/rusthinq/"}
     )
     assert done["type"] == "create_entry"
-    assert done["data"] == {CONF_URL: rusthinq.url, CONF_PREFIX: "rusthinq"}
+    assert done["data"] == {CONF_MODE: MODE_URL, CONF_URL: rusthinq.url, CONF_PREFIX: "rusthinq"}

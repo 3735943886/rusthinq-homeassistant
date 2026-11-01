@@ -2,8 +2,27 @@
   "config": {
     "step": {
       "user": {
+        "title": "rusthinq",
+        "menu_options": {
+          "embedded": "Run rusthinq in Home Assistant",
+          "url": "Connect to a running rusthinq (development)"
+        }
+      },
+      "embedded": {
+        "title": "Run rusthinq in Home Assistant",
+        "description": "Home Assistant downloads and runs the rusthinq daemon, which LG ThinQ appliances connect to on this host. Appliances open HTTPS on port 443; if another port is used here, redirect 443 to it.",
+        "data": {
+          "https_port": "HTTPS port",
+          "mqtt_port": "MQTT port"
+        },
+        "data_description": {
+          "https_port": "Where appliances are provisioned and register (443 unless a redirect points here)",
+          "mqtt_port": "Announced to appliances when they register; any free port works"
+        }
+      },
+      "url": {
         "title": "rusthinq management API",
-        "description": "Connect to a running rusthinq. This entry is for development; the built-in daemon will replace it.",
+        "description": "Connect to a rusthinq that is already running. For development: devices that also reach Home Assistant through MQTT would appear twice.",
         "data": {
           "url": "URL",
           "username": "Username",
@@ -19,10 +38,12 @@
     "error": {
       "cannot_connect": "Could not reach the management API.",
       "invalid_auth": "The management API rejected the username or password.",
-      "invalid_prefix": "The topic prefix must not be empty."
+      "invalid_prefix": "The topic prefix must not be empty.",
+      "duplicate_ports": "Each listener needs its own port.",
+      "ports_unavailable": "These ports cannot be used: {problems}"
     },
     "abort": {
-      "already_configured": "This rusthinq is already configured."
+      "already_configured": "rusthinq is already set up."
     }
   }
 }

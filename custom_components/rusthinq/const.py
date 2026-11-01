@@ -2,8 +2,25 @@
 
 DOMAIN = "rusthinq"
 
+CONF_MODE = "mode"
+MODE_EMBEDDED = "embedded"
+"""Home Assistant runs the daemon (the normal setup)."""
+MODE_URL = "url"
+"""A daemon already running at `CONF_URL` (development; entries without `CONF_MODE` are this)."""
+
 CONF_URL = "url"
 CONF_PREFIX = "prefix"
+CONF_HTTPS_PORT = "https_port"
+CONF_MQTT_PORT = "mqtt_port"
+CONF_THINQ1_HTTPS_PORT = "thinq1_https_port"
+CONF_THINQ1_PORT = "thinq1_port"
+
+DEFAULT_PORTS = {CONF_HTTPS_PORT: 443, CONF_MQTT_PORT: 8883, CONF_THINQ1_HTTPS_PORT: 46030, CONF_THINQ1_PORT: 47878}
+"""The appliance-facing listeners, at `config-0.2.sh`'s defaults. Appliances always open HTTPS on 443; another HTTPS
+port needs a redirect in front of it. The MQTT port is announced to them, so any free port works."""
+
+REQUIREMENT = "rusthinq==0.2.0rc8.post1"
+SCRIPTS_TARBALL = "https://codeload.github.com/3735943886/rusthinq-scripts/tar.gz/refs/heads/master"
 
 DEFAULT_URL = "http://127.0.0.1:44401"
 DEFAULT_PREFIX = "rusthinq"
