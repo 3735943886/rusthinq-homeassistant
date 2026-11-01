@@ -2,7 +2,7 @@
 
 Everything lives in `<config>/rusthinq/` under the names rusthinq's own installers use (`config-0.2.sh`), so an
 existing installation's CA and device files can be moved in: `ca.key`/`ca.cert`, `devices-v2.json`,
-`cloud-account-v2.json`, `scripts/` (rusthinq-scripts, downloaded on first start), plus `bin/` (the binaries copied out
+`cloud-account-v2.json`, `scripts/` (rusthinq-scripts, downloaded on first start; see `scripts.py`), plus `bin/` (the binaries copied out
 of the `rusthinq` wheel, so the daemon still starts when the wheel cannot be reinstalled) and `rusthinq.pid`.
 `config.toml` is rewritten on every start: external MQTT off, the management API on a free 127.0.0.1 port with fresh
 random credentials.
@@ -19,14 +19,12 @@ import contextlib
 import datetime as dt
 import errno
 import importlib
-import io
 import logging
 import os
 import secrets
 import shutil
 import signal
 import socket
-import tarfile
 import time
 from collections import deque
 from pathlib import Path
@@ -37,8 +35,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.requirements import async_process_requirements
 
+from . import scripts
 from .client import basic_authorization
-from .const import DOMAIN, REQUIREMENT, SCRIPTS_TARBALL
+from .const import DOMAIN, REQUIREMENT
 
 _LOGGER = logging.getLogger(__name__)
 _DAEMON_LOGGER = logging.getLogger(f"{__package__}.daemon")
@@ -156,26 +155,6 @@ def _write(path: Path, data: bytes, mode: int) -> None:
     os.replace(tmp, path)
 
 
-def install_scripts(directory: Path, tarball: bytes) -> None:
-    """Unpack a rusthinq-scripts GitHub tarball as `directory/scripts`, replacing it in one step."""
-    staging = directory / ".scripts.new"
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir()
-    with tarfile.open(fileobj=io.BytesIO(tarball), mode="r:gz") as archive:
-        archive.extractall(staging, filter="data")
-    roots = [p for p in staging.iterdir() if p.is_dir()]
-    if len(roots) != 1 or not (roots[0] / "drivers").is_dir():
-        shutil.rmtree(staging, ignore_errors=True)
-        raise DaemonError("the rusthinq-scripts download has no drivers directory")
-    target, old = directory / "scripts", directory / ".scripts.old"
-    shutil.rmtree(old, ignore_errors=True)
-    if target.exists():
-        target.rename(old)
-    roots[0].rename(target)
-    shutil.rmtree(old, ignore_errors=True)
-    shutil.rmtree(staging, ignore_errors=True)
-
-
 def copy_binaries(package_bin: Path, directory: Path) -> None:
     """Copy the wheel's binaries into `directory/bin` when they differ, replacing each atomically."""
     target = directory / "bin"
@@ -273,6 +252,8 @@ class EmbeddedDaemon:
         self._started = 0.0
         self.lines: deque[str] = deque(maxlen=LOG_LINES)
         self.management_port = 0
+        self.version: str | None = None
+        """What the binary says with `--version` (`rusthinq 0.2.0-rc8` → `0.2.0-rc8`)."""
         self._user, self._password = "homeassistant", secrets.token_urlsafe(24)
         self.headers = basic_authorization(self._user, self._password)
 
@@ -315,6 +296,7 @@ class EmbeddedDaemon:
             package_bin = None
             _LOGGER.warning("could not install %s (%s); using the binaries copied last time", REQUIREMENT, err)
         await self._hass.async_add_executor_job(self._prepare_files, package_bin)
+        self.version = await self._binary_version()
         if not (self._dir / "scripts").is_dir():
             await self._download_scripts()
         self.management_port = await self._hass.async_add_executor_job(free_local_port)
@@ -337,17 +319,23 @@ class EmbeddedDaemon:
         if problems := busy_ports(self._ports):
             raise DaemonError("; ".join(problems))
 
+    async def _binary_version(self) -> str | None:
+        with contextlib.suppress(OSError, TimeoutError):
+            proc = await asyncio.create_subprocess_exec(
+                str(self._dir / "bin" / "rusthinq"), "--version", stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), 10)
+            return out.decode(errors="replace").strip().removeprefix("rusthinq ") or None
+        return None
+
     async def _download_scripts(self) -> None:
-        _LOGGER.info("downloading rusthinq-scripts from %s", SCRIPTS_TARBALL)
+        _LOGGER.info("downloading rusthinq-scripts (%s)", scripts.tarball_url(scripts.BRANCH))
         try:
-            async with async_get_clientsession(self._hass).get(
-                SCRIPTS_TARBALL, timeout=aiohttp.ClientTimeout(total=120)
-            ) as response:
-                response.raise_for_status()
-                tarball = await response.read()
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise DaemonError(f"could not download rusthinq-scripts: {err}") from err
-        await self._hass.async_add_executor_job(install_scripts, self._dir, tarball)
+            tarball = await scripts.download(async_get_clientsession(self._hass))
+            await self._hass.async_add_executor_job(scripts.install, self._dir, tarball)
+        except scripts.ScriptsError as err:
+            raise DaemonError(str(err)) from err
 
     # ---- running -------------------------------------------------------------------------
 

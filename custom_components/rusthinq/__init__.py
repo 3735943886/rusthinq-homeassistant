@@ -28,8 +28,8 @@ from .const import (
     CONF_URL,
     DEFAULT_PORTS,
     DOMAIN,
+    ENTRY_PLATFORMS,
     MODE_EMBEDDED,
-    PLATFORMS,
 )
 from .embedded import DaemonError, EmbeddedDaemon
 
@@ -90,7 +90,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     hub = build_hub(hass, {CONF_IL_PREFIX: prefix, CONF_AUTO_ADD: True}, transport, DOMAIN, entry.entry_id)
     client = ManagementClient(async_get_clientsession(hass), url, transport, prefix, headers=headers)
     entry.runtime_data = RusthinqData(hub, client, daemon)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, ENTRY_PLATFORMS)
     await hub.async_start()
     await client.start()
     return True
@@ -99,7 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
 async def async_unload_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> bool:
     data = entry.runtime_data
     await data.client.stop()
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, ENTRY_PLATFORMS)
     if unloaded:
         await data.hub.async_stop()
     if data.daemon is not None:

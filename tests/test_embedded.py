@@ -2,13 +2,10 @@
 directory. rusthinq-scripts is not downloaded (an empty drivers directory is put in its place), so no devices appear."""
 
 import asyncio
-import gzip
-import io
 import os
 import signal
 import socket
 import subprocess
-import tarfile
 from pathlib import Path
 
 import pytest
@@ -137,22 +134,6 @@ def test_an_https_port_behind_a_redirect_is_advertised_as_443():
     assert "https_advertise = 443" in embedded.render_config(https_port=8443, **common)
     assert "https_advertise" not in embedded.render_config(https_port=443, **common)
     assert 'password = "p\\"w"' in embedded.render_config(https_port=443, **common)
-
-
-def test_scripts_are_replaced_in_one_step(tmp_path):
-    def tarball(marker: str) -> bytes:
-        buf = io.BytesIO()
-        with tarfile.open(fileobj=buf, mode="w") as archive:
-            for name, data in ((f"rusthinq-scripts-master/drivers/{marker}.rhai", b"//"),):
-                info = tarfile.TarInfo(name)
-                info.size = len(data)
-                archive.addfile(info, io.BytesIO(data))
-        return gzip.compress(buf.getvalue())
-
-    embedded.install_scripts(tmp_path, tarball("old"))
-    embedded.install_scripts(tmp_path, tarball("new"))
-    assert sorted(p.name for p in (tmp_path / "scripts" / "drivers").iterdir()) == ["new.rhai"]
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["scripts"]
 
 
 async def test_config_flow_checks_ports_and_allows_one_embedded_entry(hass, config_dir):

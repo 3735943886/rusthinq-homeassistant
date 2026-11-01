@@ -20,7 +20,6 @@ DEFAULT_PORTS = {CONF_HTTPS_PORT: 443, CONF_MQTT_PORT: 8883, CONF_THINQ1_HTTPS_P
 port needs a redirect in front of it. The MQTT port is announced to them, so any free port works."""
 
 REQUIREMENT = "rusthinq==0.2.0rc8.post1"
-SCRIPTS_TARBALL = "https://codeload.github.com/3735943886/rusthinq-scripts/tar.gz/refs/heads/master"
 
 DEFAULT_URL = "http://127.0.0.1:44401"
 DEFAULT_PREFIX = "rusthinq"
@@ -47,3 +46,7 @@ PLATFORMS = [
     "valve",
 ]
 """ildevice's platforms (`custom_components.ildevice.const.PLATFORMS`); each needs a module here."""
+
+ENTRY_PLATFORMS = [*PLATFORMS, "update"]
+"""What an entry forwards: ildevice's platforms and this integration's own `update` (the drivers of the embedded
+daemon)."""
