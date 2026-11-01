@@ -120,3 +120,39 @@ async def test_presence_follows_the_event_stream(air_conditioner, client):
     await eventually(lambda: retained(transport, client.presence_topic) == "offline")
     await eventually(lambda: retained(transport, client.presence_topic) == "online")
     assert air_conditioner.connections == 2
+
+
+def label(transport: InProcessTransport) -> str:
+    return json.loads(retained(transport, f"{TOPIC}/descriptor"))["label"]
+
+
+async def test_the_descriptor_carries_rusthinqs_name_for_the_device(rusthinq):
+    from conftest import load
+
+    rusthinq.add_device(AC, load("air_conditioner.json")["publications"], name="거실에어컨")
+    transport = InProcessTransport()
+    async with aiohttp.ClientSession() as http:
+        client = ManagementClient(http, rusthinq.url, transport, PREFIX)
+        await client.start()
+        await eventually(lambda: retained(transport, f"{TOPIC}/descriptor"))
+        assert label(transport) == "거실에어컨"
+        await client.stop()
+
+
+async def test_without_a_name_the_drivers_label_stays(air_conditioner, client):
+    await eventually(lambda: retained(client.transport, f"{TOPIC}/descriptor"))
+    assert label(client.transport) == "Air conditioner"
+
+
+async def test_a_name_that_appears_later_is_passed_on(air_conditioner, client, monkeypatch):
+    transport = client.transport
+    await eventually(lambda: retained(transport, f"{TOPIC}/descriptor"))
+    assert label(transport) == "Air conditioner"
+    air_conditioner.devices[AC]["name"] = "안방에어컨"
+    await air_conditioner.send({"type": "stateChanged", "detail": "names"})
+    await eventually(lambda: label(transport) == "안방에어컨", timeout=5)
+    # a later descriptor from the driver keeps it
+    descriptor = json.loads(retained(transport, f"{TOPIC}/descriptor"))
+    await air_conditioner.output(AC, f"{TOPIC}/descriptor", json.dumps({**descriptor, "label": "Air conditioner"}))
+    await asyncio.sleep(0.1)
+    assert label(transport) == "안방에어컨"

@@ -99,3 +99,11 @@ async def test_url_config_flow(hass, rusthinq):
     )
     assert done["type"] == "create_entry"
     assert done["data"] == {CONF_MODE: MODE_URL, CONF_URL: rusthinq.url, CONF_PREFIX: "rusthinq"}
+
+
+async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):
+    air_conditioner.devices[AC]["name"] = "거실에어컨"
+    entry = await setup(hass, air_conditioner)
+    await eventually(hass, lambda: climate_entity(hass))
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert [d.name for d in devices] == ["거실에어컨"]

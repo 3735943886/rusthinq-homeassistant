@@ -5,6 +5,10 @@ rusthinq publishes what its drivers produce on the `/api/events` websocket (`scr
 current publications of an online device. This client replays both into an IL transport, and turns the IL commands
 consumers publish on `<prefix>/<device>/<prop>/set` into `invoke(__command, {"prop", "value"})`, the same call
 rusthinq's own MQTT command path makes. Nothing here imports Home Assistant.
+
+A descriptor's `label` is the name a person calls the device, the owner's own when the producer knows it (il.md). The
+drivers do not know it, rusthinq does (`name` in `/api/devices`, from the LG account), so it replaces the label of each
+descriptor passed on, and a descriptor is passed on again when that name appears or changes.
 """
 
 from __future__ import annotations
@@ -99,6 +103,10 @@ class ManagementClient:
         self.devices: dict[str, dict[str, Any]] = {}
         """Each device as `/api/devices` describes it (online, bridge, driver, firmware...), by id."""
         self.features: dict[str, Any] = {}
+        self._descriptors: dict[str, tuple[str, dict[str, Any], bool]] = {}
+        """The last descriptor each device's driver published, as published: (topic, document, retain)."""
+        self._labels: dict[str, str | None] = {}
+        """The name each descriptor was passed on with (None: the driver's own label)."""
 
     def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         """Call `listener` when `devices`, `features` or `connected` change; returns the function that removes it."""
@@ -175,11 +183,11 @@ class ManagementClient:
             if kind == "lost":
                 _LOGGER.warning("rusthinq dropped %s events; resynchronizing", event.get("events"))
             state = event.get("state") or {}
-            self._start_resync(state)
             if not self.connected.is_set():
                 self.connected.set()
                 await self._presence(True)
-            self._set_devices(state)
+            await self._set_devices(state)
+            self._start_resync(state)
             self._schedule_status(STATUS_INTERVAL)
         elif kind in STATUS_EVENTS and "cloudBound" not in event:
             self._schedule_status(STATUS_SETTLE)
@@ -196,10 +204,25 @@ class ManagementClient:
                 self._live.setdefault(device, set()).add(publication.get("topic"))
             await self._publish(publication)
 
-    def _set_devices(self, state: dict[str, Any]) -> None:
+    async def _set_devices(self, state: dict[str, Any]) -> None:
         self.devices = dict(state.get("devices") or {})
         self.features = dict(state.get("features") or {})
         self._changed()
+        for device, (topic, document, retain) in list(self._descriptors.items()):
+            if self._name(device) != self._labels.get(device):
+                await self._publish({"topic": topic, "payload": document, "retain": retain})
+
+    def _name(self, device: str) -> str | None:
+        return (self.devices.get(device) or {}).get("name") or None
+
+    def _descriptor_of(self, topic: str) -> str | None:
+        """The device whose descriptor `topic` carries (`<prefix>/<id>` or `<prefix>/<id>/descriptor`), or None."""
+        if not topic.startswith(f"{self._prefix}/"):
+            return None
+        parts = topic[len(self._prefix) + 1:].split("/")
+        if len(parts) == 1 or (len(parts) == 2 and parts[1] == "descriptor"):
+            return parts[0] if parts[0] and not parts[0].startswith("_") else None
+        return None
 
     def _schedule_status(self, delay: float) -> None:
         """Re-read the devices after `delay`, or sooner if already due; then again after `STATUS_INTERVAL`."""
@@ -236,7 +259,7 @@ class ManagementClient:
             else:
                 self._sessions.pop(device, None)
         if self.connected.is_set():
-            self._set_devices(state)
+            await self._set_devices(state)
         return state
 
     def _start_resync(self, state: dict[str, Any]) -> None:
@@ -288,9 +311,26 @@ class ManagementClient:
         topic, payload = publication.get("topic"), publication.get("payload", "")
         if not isinstance(topic, str) or not topic:
             return
+        retain = bool(publication.get("retain"))
+        if (device := self._descriptor_of(topic)) is not None:
+            payload = self._labelled(device, topic, payload, retain)
         if not isinstance(payload, str):
-            payload = json.dumps(payload)
-        await self._transport.publish(topic, payload, qos=1, retain=bool(publication.get("retain")))
+            payload = json.dumps(payload, ensure_ascii=False)
+        await self._transport.publish(topic, payload, qos=1, retain=retain)
+
+    def _labelled(self, device: str, topic: str, payload: Any, retain: bool) -> Any:
+        """A descriptor with rusthinq's name for the device as its label, remembered to pass on again if it changes."""
+        try:
+            document = json.loads(payload) if isinstance(payload, str) else payload
+        except ValueError:
+            document = None
+        if not isinstance(document, dict) or document.get("id") != device:
+            self._descriptors.pop(device, None)  # removed (empty payload) or not a descriptor
+            self._labels.pop(device, None)
+            return payload
+        self._descriptors[device] = (topic, document, retain)
+        self._labels[device] = name = self._name(device)
+        return {**document, "label": name} if name else document
 
     async def _presence(self, online: bool) -> None:
         await self._transport.publish(self.presence_topic, "online" if online else "offline", qos=1, retain=True)
