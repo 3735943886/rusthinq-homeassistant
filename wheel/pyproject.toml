@@ -14,6 +14,10 @@ license = "GPL-2.0-or-later"
 license-files = ["COPYING"]
 requires-python = ">=3.10"
 
+[project.scripts]
+rusthinq = "rusthinq._cli:rusthinq"
+rusthinqctl = "rusthinq._cli:rusthinqctl"
+
 [project.urls]
 Homepage = "https://github.com/3735943886/rusthinq"
 Source = "https://github.com/3735943886/rusthinq"

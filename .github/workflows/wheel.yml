@@ -75,6 +75,8 @@ jobs:
           python -m venv /tmp/venv
           /tmp/venv/bin/pip install --no-index --find-links dist rusthinq
           /tmp/venv/bin/python -c "$CHECK"
+          /tmp/venv/bin/rusthinq --version
+          /tmp/venv/bin/rusthinqctl > /dev/null
         env:
           CHECK: &check |
             import subprocess, rusthinq
