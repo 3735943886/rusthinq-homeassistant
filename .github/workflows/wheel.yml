@@ -3,9 +3,9 @@ name: Wheel
 # Wraps the Linux binaries (musl static-pie) of a rusthinq GitHub release unchanged in wheels and uploads them
 # to PyPI `rusthinq`. No Rust build: the release tarballs are verified against SHA256SUMS and packaged by
 # wheel/build.sh. amd64/aarch64 only, since HA dropped 32-bit support.
-# Auth is Trusted Publishing (this repo + this workflow + environment `testpypi`/`pypi` registered on each index);
-# no token secret. Check a new release with index=testpypi first, then run again with pypi. PyPI never accepts the
-# same version twice, so repackaging an uploaded version needs `post`.
+# Auth is Trusted Publishing (this repo + this workflow + environment `pypi` registered on PyPI); no token secret.
+# The smoke job must pass before anything is uploaded. PyPI never accepts the same version twice, so repackaging
+# an uploaded version needs `post`.
 on:
   workflow_dispatch:
     inputs:
@@ -17,12 +17,6 @@ on:
         description: "Repackaging number for the same binaries (.postN); empty for none"
         required: false
         type: string
-      index:
-        description: "Index to upload to"
-        required: true
-        type: choice
-        options: [testpypi, pypi]
-        default: testpypi
 
 permissions:
   contents: read
@@ -100,7 +94,7 @@ jobs:
   publish:
     needs: smoke
     runs-on: ubuntu-latest
-    environment: ${{ inputs.index }}
+    environment: pypi
     permissions:
       id-token: write
     steps:
@@ -112,4 +106,3 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
-          repository-url: ${{ inputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
