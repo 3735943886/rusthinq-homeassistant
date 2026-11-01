@@ -24,7 +24,7 @@ class FakeRusthinq:
                                         "stored": False}
         self.cloud_calls: list[tuple[str, dict[str, Any]]] = []
         self.cloud_failure: tuple[int, str] | None = None
-        """When set, the next LG account or bridge call answers with this status and error."""
+        """When set, the next LG account, bridge or invoke call answers with this status and error."""
         self._runner: web.AppRunner | None = None
         self.url = ""
 
@@ -138,6 +138,8 @@ class FakeRusthinq:
     async def _invoke(self, request: web.Request) -> web.Response:
         device, body = request.match_info["id"], await request.json()
         self.invokes.append((device, body))
+        if (failure := self._failure()) is not None:
+            return failure
         if not all(isinstance(body.get(k), str) for k in ("incarnation", "generation", "script_generation")):
             return web.json_response({"error": "numbers as strings"}, status=400)
         if not self._current(device, body["incarnation"], body["generation"], body["script_generation"]):

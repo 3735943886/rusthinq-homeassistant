@@ -113,3 +113,17 @@ async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):
     await eventually(hass, lambda: climate_entity(hass))
     devices = appliances(hass, entry)
     assert [d.name for d in devices] == ["거실에어컨"]
+
+
+async def test_a_command_rusthinq_refuses_fires_the_rejection_event(hass, air_conditioner):
+    from custom_components.ildevice.const import EVENT_COMMAND_REJECTED
+
+    events = []
+    hass.bus.async_listen(EVENT_COMMAND_REJECTED, events.append)
+    await setup(hass, air_conditioner)
+    await eventually(hass, lambda: climate_entity(hass) and hass.states.get(climate_entity(hass)))
+    air_conditioner.cloud_failure = (503, "shutting down")
+    await hass.services.async_call("climate", "set_temperature", {"entity_id": climate_entity(hass),
+                                                                  "temperature": 22}, blocking=True)
+    await eventually(hass, lambda: events)
+    assert {k: events[0].data.get(k) for k in ("prop", "code")} == {"prop": "target", "code": "unavailable"}

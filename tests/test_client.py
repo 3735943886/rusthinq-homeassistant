@@ -86,11 +86,31 @@ async def test_a_stale_session_is_refreshed_and_the_command_retried_once(air_con
     assert [body["generation"] for _, body in air_conditioner.invokes] == ["100", "101"]
 
 
-async def test_a_command_for_an_offline_device_is_dropped(rusthinq, client):
+async def rejects(transport: InProcessTransport) -> list[dict]:
+    """The IL rejects published from now on."""
+    seen: list[dict] = []
+    await transport.subscribe(f"{PREFIX}/+/reject", lambda msg: seen.append({"topic": msg.topic,
+                                                                             **json.loads(msg.payload)}))
+    return seen
+
+
+async def test_a_command_for_an_offline_device_is_rejected(rusthinq, client):
     rusthinq.add_device("washer", [], online=False)
+    seen = await rejects(client.transport)
     await eventually(lambda: client.connected.is_set())
     assert not await client.command("washer", "power", "true")
     assert rusthinq.invokes == []
+    assert seen == [{"topic": f"{PREFIX}/washer/reject", "prop": "power", "code": "unavailable",
+                     "reason": "the device is offline"}]
+
+
+async def test_a_command_rusthinq_refuses_is_rejected(air_conditioner, client):
+    seen = await rejects(client.transport)
+    await eventually(lambda: client.connected.is_set())
+    air_conditioner.cloud_failure = (429, "queue full")
+    assert not await client.command(AC, "power", "true")
+    assert [(r["topic"], r["prop"], r["code"]) for r in seen] == [(f"{TOPIC}/reject", "power", "unavailable")]
+    assert "429" in seen[0]["reason"] and "queue full" in seen[0]["reason"]
 
 
 async def test_foreign_set_topics_are_not_commands(air_conditioner, client):

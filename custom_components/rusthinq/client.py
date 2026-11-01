@@ -417,21 +417,31 @@ class ManagementClient:
         task.add_done_callback(self._commands.discard)
 
     async def command(self, device: str, prop: str, value: str) -> bool:
-        """Invoke the driver's `__command`; once more with a fresh session if the device reconnected meanwhile."""
+        """Invoke the driver's `__command`; once more with a fresh session if the device reconnected meanwhile.
+
+        The driver checks the write and rejects it itself (il.md section 5); what fails before it is reached is
+        rejected here as `unavailable`, since the write cannot be delivered or queued."""
         for attempt in range(2):
             session = self._sessions.get(device)
             if session is None or attempt:
                 session = await self._refresh_session(device)
             if session is None:
-                _LOGGER.warning("command %s=%s for %s dropped: the device is offline", prop, value, device)
+                await self._reject(device, prop, "the device is offline")
                 return False
             status, reason = await self._invoke(device, session, prop, value)
             if status == 202:
                 return True
             if status != 409:
                 break
-        _LOGGER.warning("command %s=%s for %s rejected by rusthinq (%s): %s", prop, value, device, status, reason)
+        await self._reject(device, prop, f"rusthinq refused the command ({status or 'no answer'}): {reason}")
         return False
+
+    async def _reject(self, device: str, prop: str, reason: str) -> None:
+        """Publish an IL `Reject` on the device's reject topic (il-mqtt.md), where the consumer reports it."""
+        _, document, _ = self._descriptors.get(device) or (None, {}, None)
+        template = (document.get("x-mqtt") or {}).get("reject") or f"{self._prefix}/{{id}}/reject"
+        body = {"prop": prop, "code": "unavailable", "reason": reason}
+        await self._transport.publish(template.replace("{id}", device), json.dumps(body), qos=1, retain=False)
 
     async def _invoke(self, device: str, session: Session, prop: str, value: str) -> tuple[int, str]:
         body = {

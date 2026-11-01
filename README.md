@@ -88,6 +88,8 @@ off) keeps its entities across Home Assistant restarts, unavailable until it con
 
 - The daemon's own log is the logger `custom_components.rusthinq.daemon`; the integration's is
   `custom_components.rusthinq`.
+- A command that cannot be carried out (the appliance is offline, a value out of range…) fires the Home Assistant
+  event `ildevice_command_rejected` with the property, a code and the reason, and is logged.
 - A setup that keeps retrying shows its reason on the integration card (a port in use, for example).
 - If Home Assistant was killed, a daemon it left running is stopped on the next start.
 
