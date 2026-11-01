@@ -5,6 +5,7 @@
         "title": "rusthinq",
         "menu_options": {
           "embedded": "Run rusthinq in Home Assistant",
+          "migrate": "Move an existing rusthinq into Home Assistant",
           "url": "Connect to a running rusthinq (development)"
         }
       },
@@ -33,6 +34,20 @@
           "url": "Base URL of the management API, for example http://127.0.0.1:44401",
           "prefix": "rusthinq's `[drivers] topic_prefix`"
         }
+      },
+      "migrate": {
+        "title": "Move an existing rusthinq into Home Assistant",
+        "description": "Keeps the CA your appliances trust, their device records, the LG account and the settings appliances notice, so nothing needs provisioning again.\n\n1. Stop rusthinq on the old host, and keep it stopped: both would answer the same appliances and LG account.\n2. In the directory of its config.toml, archive config.toml with the files it names (CA key and certificate, device ledger, LG account and its .pairings), for example:\n   `tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`\n3. Upload the archive here and choose this host's ports.\n4. Point the appliances' route (DNS or redirect) at this host.",
+        "data": {
+          "archive": "Export archive",
+          "https_port": "HTTPS port",
+          "mqtt_port": "MQTT port"
+        },
+        "data_description": {
+          "archive": "A .tar.gz of config.toml and the files it names",
+          "https_port": "Where appliances are provisioned and register (443 unless a redirect points here)",
+          "mqtt_port": "Announced to appliances when they register; any free port works"
+        }
       }
     },
     "error": {
@@ -40,7 +55,8 @@
       "invalid_auth": "The management API rejected the username or password.",
       "invalid_prefix": "The topic prefix must not be empty.",
       "duplicate_ports": "Each listener needs its own port.",
-      "ports_unavailable": "These ports cannot be used: {problems}"
+      "ports_unavailable": "These ports cannot be used: {problems}",
+      "invalid_archive": "The archive cannot be imported: {problems}"
     },
     "abort": {
       "already_configured": "rusthinq is already set up."

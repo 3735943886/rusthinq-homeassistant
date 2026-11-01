@@ -23,6 +23,7 @@ from .const import (
     CONF_MODE,
     CONF_MQTT_PORT,
     CONF_PREFIX,
+    CONF_SETTINGS,
     CONF_THINQ1_HTTPS_PORT,
     CONF_THINQ1_PORT,
     CONF_URL,
@@ -70,7 +71,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     prefix = entry.data[CONF_PREFIX]
     daemon = None
     if entry.data.get(CONF_MODE) == MODE_EMBEDDED:
-        daemon = EmbeddedDaemon(hass, ports=daemon_ports(entry.data), prefix=prefix)
+        daemon = EmbeddedDaemon(hass, ports=daemon_ports(entry.data), prefix=prefix,
+                                settings=entry.data.get(CONF_SETTINGS))
         try:
             await daemon.async_start()
         except DaemonError as err:

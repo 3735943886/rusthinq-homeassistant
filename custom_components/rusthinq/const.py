@@ -14,6 +14,9 @@ CONF_HTTPS_PORT = "https_port"
 CONF_MQTT_PORT = "mqtt_port"
 CONF_THINQ1_HTTPS_PORT = "thinq1_https_port"
 CONF_THINQ1_PORT = "thinq1_port"
+CONF_SETTINGS = "settings"
+"""An imported installation's daemon settings (`migrate.Imported.settings`), kept for every start."""
+CONF_ARCHIVE = "archive"
 
 DEFAULT_PORTS = {CONF_HTTPS_PORT: 443, CONF_MQTT_PORT: 8883, CONF_THINQ1_HTTPS_PORT: 46030, CONF_THINQ1_PORT: 47878}
 """The appliance-facing listeners, at `config-0.2.sh`'s defaults. Appliances always open HTTPS on 443; another HTTPS

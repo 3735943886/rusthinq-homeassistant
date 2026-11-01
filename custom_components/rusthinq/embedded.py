@@ -72,11 +72,23 @@ def _toml(value) -> str:
     return f'"{escaped}"'
 
 
+DEFAULT_SETTINGS = {
+    "hostname": "rusthinq.lan",
+    "legacy_tls": True,
+    "advertise_requested_host": True,
+    "bridge_dns": ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"],
+}
+"""`config-0.2.sh`'s defaults for the settings an imported installation brings its own of (`migrate.py`)."""
+
+
 def render_config(*, https_port: int, mqtt_port: int, thinq1_https_port: int, thinq1_port: int, prefix: str,
-                  management_port: int, user: str, password: str, hostname: str = "rusthinq.lan") -> str:
-    """The daemon configuration, with `config-0.2.sh`'s defaults and file names. Paths are relative to the file."""
+                  management_port: int, user: str, password: str, settings: dict | None = None) -> str:
+    """The daemon configuration, with `config-0.2.sh`'s defaults and file names, and `settings` (an imported
+    installation's `hostname`, `legacy_tls`, `advertise_requested_host`, `bridge_dns`) over them. Paths are relative
+    to the file."""
+    settings = {**DEFAULT_SETTINGS, **{k: v for k, v in (settings or {}).items() if k in DEFAULT_SETTINGS}}
     lines = [
-        f"hostname = {_toml(hostname)}",
+        f"hostname = {_toml(settings['hostname'])}",
         'ca_key = "ca.key"',
         'ca_certificate = "ca.cert"',
         'device_ledger = "devices-v2.json"',
@@ -84,12 +96,12 @@ def render_config(*, https_port: int, mqtt_port: int, thinq1_https_port: int, th
         f'mqtt_bind = "0.0.0.0:{mqtt_port}"',
         f'thinq1_https_bind = "0.0.0.0:{thinq1_https_port}"',
         f'thinq1_bind = "0.0.0.0:{thinq1_port}"',
-        "legacy_tls = true",
-        "advertise_requested_host = true",
+        f"legacy_tls = {_toml(settings['legacy_tls'])}",
+        f"advertise_requested_host = {_toml(settings['advertise_requested_host'])}",
         # Appliances reach HTTPS on 443 whatever port it is bound to (a redirect in front of it, as on r5c).
         *(["https_advertise = 443"] if https_port not in (0, 443) else []),
         'cloud_account = "cloud-account-v2.json"',
-        'bridge_dns = ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"]',
+        f"bridge_dns = {_toml(settings['bridge_dns'])}",
         "",
         "[drivers]",
         'directory = "scripts"',
@@ -240,11 +252,12 @@ def _alive(pid: int) -> bool:
 
 
 class EmbeddedDaemon:
-    def __init__(self, hass: HomeAssistant, *, ports: dict[str, int], prefix: str) -> None:
+    def __init__(self, hass: HomeAssistant, *, ports: dict[str, int], prefix: str, settings: dict | None = None) -> None:
         self._hass = hass
         self._dir = data_dir(hass)
         self._ports = ports
         self._prefix = prefix
+        self._settings = settings or {}
         self._proc: asyncio.subprocess.Process | None = None
         self._pump: asyncio.Task | None = None
         self._supervisor: asyncio.Task | None = None
@@ -304,7 +317,7 @@ class EmbeddedDaemon:
             https_port=self._ports["https"], mqtt_port=self._ports["mqtt"],
             thinq1_https_port=self._ports["thinq1_https"], thinq1_port=self._ports["thinq1"],
             prefix=self._prefix, management_port=self.management_port, user=self._user,
-            password=self._password,
+            password=self._password, settings=self._settings,
         )
         await self._hass.async_add_executor_job(_write, self.config_path, config.encode(), 0o600)
 
