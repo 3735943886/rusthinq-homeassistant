@@ -160,15 +160,15 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
             raise migrate.MigrateError(f"{directory} already holds a different {', '.join(clash)}")
 
     async def async_step_migrate_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """What the backup holds, and this host's ports. The backup stays in the flow, so a refused port or an old
-        daemon still running only needs fixing, not another upload."""
+        """What the backup holds, and this host's ports, the old ones suggested. The backup stays in the flow, so a
+        refused port or an old daemon still running only needs fixing, not another upload."""
         imported = self._imported
         assert imported is not None
         errors: dict[str, str] = {}
         placeholders = {"problems": "", **_origin_placeholders(imported.origin)}
         if user_input is not None:
             settings = dict(imported.settings)
-            data = {CONF_MODE: MODE_EMBEDDED, **DEFAULT_PORTS, **user_input,
+            data = {CONF_MODE: MODE_EMBEDDED, **DEFAULT_PORTS, **imported.ports, **user_input,
                     CONF_PREFIX: settings.pop("topic_prefix", DEFAULT_PREFIX), CONF_SETTINGS: settings}
             try:
                 await self._check_conflicts(imported)
@@ -183,7 +183,9 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
                     await self.hass.async_add_executor_job(migrate.install, data_dir(self.hass), imported)
                     return self.async_create_entry(title="rusthinq", data=data)
         return self.async_show_form(
-            step_id=STEP_CONFIRM, data_schema=self.add_suggested_values_to_schema(_ports_schema(), user_input),
+            step_id=STEP_CONFIRM, data_schema=self.add_suggested_values_to_schema(
+                vol.Schema({vol.Required(key): PORT for key in DEFAULT_PORTS}),
+                user_input or {**DEFAULT_PORTS, **imported.ports}),
             errors=errors, description_placeholders=placeholders,
         )
 

@@ -8,10 +8,10 @@ is found exactly. A hand-made tar archive (gzip or not) of `config.toml` and the
 
 What moves: the CA (appliances trust it, so a new one would mean provisioning every appliance again), the device
 ledger, the LG account and its pairings, and the settings appliances or drivers notice (`hostname`, `legacy_tls`,
-`advertise_requested_host`, `[drivers] topic_prefix`, `bridge_dns`). Listener ports are chosen anew for this host;
-external MQTT and its retained-topic inventory stay behind, since Home Assistant is the MQTT consumer now. Files land
-under `config-0.2.sh`'s names, as the embedded daemon expects. Nothing already in the data directory is replaced by
-something different.
+`advertise_requested_host`, `[drivers] topic_prefix`, `bridge_dns`), and the listener ports from the `*_bind`
+addresses, which the config flow suggests for this host. External MQTT and its retained-topic inventory stay behind,
+since Home Assistant is the MQTT consumer now. Files land under `config-0.2.sh`'s names, as the embedded daemon
+expects. Nothing already in the data directory is replaced by something different.
 """
 
 from __future__ import annotations
@@ -28,12 +28,16 @@ from typing import Any
 
 import aiohttp
 
+from .const import CONF_HTTPS_PORT, CONF_MQTT_PORT, CONF_THINQ1_HTTPS_PORT, CONF_THINQ1_PORT
+
 MAX_MEMBER = 32 << 20
 MAX_ARCHIVE = 64 << 20
 """rusthinq's own bound on a backup."""
 MANIFEST = "backup.json"
 MANIFEST_FORMAT = 1
 FETCH_TIMEOUT = aiohttp.ClientTimeout(total=60)
+BINDS = {"https_bind": CONF_HTTPS_PORT, "mqtt_bind": CONF_MQTT_PORT, "thinq1_https_bind": CONF_THINQ1_HTTPS_PORT,
+         "thinq1_bind": CONF_THINQ1_PORT}
 
 
 class MigrateError(Exception):
@@ -69,6 +73,9 @@ class Imported:
     settings: dict[str, Any] = field(default_factory=dict)
     """The old daemon's settings that carry over (keys as in `config.toml`; `topic_prefix` from `[drivers]`)."""
     origin: Origin = field(default_factory=Origin)
+    ports: dict[str, int] = field(default_factory=dict)
+    """The old listener ports by entry key (`const.DEFAULT_PORTS`'s); a listener without a usable `*_bind` (one the old
+    daemon did not run) is left out."""
 
 
 async def fetch(session: aiohttp.ClientSession, url: str, headers: dict[str, str]) -> bytes:
@@ -150,7 +157,16 @@ def read_export(archive: bytes) -> Imported:
         rusthinq=manifest["rusthinq"] if manifest else None,
         created=manifest["created"] if manifest else None,
     )
-    return Imported(files, settings, origin)
+    ports = {key: port for name, key in BINDS.items() if (port := bind_port(config.get(name)))}
+    return Imported(files, settings, origin, ports)
+
+
+def bind_port(address: Any) -> int | None:
+    """The port of a `host:port` bind address (`[::]:443` too), or None."""
+    if not isinstance(address, str):
+        return None
+    _, _, port = address.rpartition(":")
+    return int(port) if port.isascii() and port.isdigit() and 0 < int(port) <= 65535 else None
 
 
 def _members(archive: bytes) -> dict[str, bytes]:

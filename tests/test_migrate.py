@@ -145,6 +145,13 @@ def test_an_export_maps_to_the_embedded_names_and_keeps_the_settings(old_install
     }
     assert imported.settings == {"hostname": "rusthinq.local", "legacy_tls": True, "advertise_requested_host": True,
                                  "topic_prefix": "rusthinq"}
+    assert imported.ports == {CONF_HTTPS_PORT: 8443, CONF_MQTT_PORT: 8883}  # no ThinQ1 listeners on r5c
+
+
+@pytest.mark.parametrize(("address", "port"), [("0.0.0.0:8443", 8443), ("[::]:443", 443), ("0.0.0.0:0", None),
+                                               ("0.0.0.0", None), ("x:99999", None), (8443, None)])
+def test_bind_port(address, port):
+    assert migrate.bind_port(address) == port
 
 
 def test_a_backup_is_read_through_its_manifest_and_says_where_it_came_from(old_backup, ca, ledger):
@@ -240,6 +247,10 @@ def test_imported_settings_reach_the_daemon_configuration():
     assert "bridge_dns = []" in config
 
 
+def suggested(form) -> dict[str, int]:
+    return {str(key): key.description["suggested_value"] for key in form["data_schema"].schema}
+
+
 async def test_the_migrate_flow_installs_the_export_and_the_daemon_runs_on_it(
     hass, tmp_path, old_install, enable_custom_integrations, socket_enabled, monkeypatch
 ):
@@ -271,9 +282,12 @@ async def test_the_migrate_flow_installs_the_export_and_the_daemon_runs_on_it(
     assert confirm["step_id"] == "migrate_confirm", confirm
     assert confirm["description_placeholders"]["hostname"] == "rusthinq.local"
     assert confirm["description_placeholders"]["rusthinq"] == "–"  # a hand-made export does not say
+    # r5c's ports are suggested; ThinQ1, which it does not run, at the defaults
+    assert suggested(confirm) == {CONF_HTTPS_PORT: 8443, CONF_MQTT_PORT: 8883, CONF_THINQ1_HTTPS_PORT: 46030,
+                                  CONF_THINQ1_PORT: 47878}
     https, mqtt = embedded.free_local_port(), embedded.free_local_port()
     done = await hass.config_entries.flow.async_configure(
-        confirm["flow_id"], {CONF_HTTPS_PORT: https, CONF_MQTT_PORT: mqtt}
+        confirm["flow_id"], {**suggested(confirm), CONF_HTTPS_PORT: https, CONF_MQTT_PORT: mqtt}
     )
     assert done["type"] == "create_entry", done
     assert done["data"][CONF_PREFIX] == "rusthinq"
@@ -319,7 +333,8 @@ async def test_the_backup_is_fetched_from_the_old_daemon_which_must_be_stopped_b
     assert {k: confirm["description_placeholders"][k] for k in ("hostname", "devices", "account", "rusthinq")} == {
         "hostname": "rusthinq.local", "devices": "0", "account": "KR", "rusthinq": "0.2.0"}
 
-    ports = {CONF_HTTPS_PORT: embedded.free_local_port(), CONF_MQTT_PORT: embedded.free_local_port()}
+    ports = {**suggested(confirm), CONF_HTTPS_PORT: embedded.free_local_port(),
+             CONF_MQTT_PORT: embedded.free_local_port()}
     again = await hass.config_entries.flow.async_configure(confirm["flow_id"], ports)
     assert again["errors"] == {"base": "source_running"}
     assert not (tmp_path / DOMAIN / "ca.key").exists()

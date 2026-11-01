@@ -65,15 +65,16 @@ existing rusthinq into Home Assistant** and take the old installation's backup o
   `tar czf rusthinq-export.tar.gz config.toml ca.key ca.cert devices.json account.json account.json.pairings`
 
 The next step shows what the backup holds (host name, devices, LG account, the rusthinq version that wrote it) and
-asks for this host's ports. Then:
+asks for this host's ports, filled in with the old installation's. Then:
 
 1. Stop rusthinq on the old host and keep it stopped: two daemons would answer the same appliances and LG account.
    A backup copied from a running rusthinq is installed only once that rusthinq no longer answers.
-2. Submit the ports.
+2. Submit the ports, changing those this host cannot open (the form says which).
 3. Point the appliances' route (DNS or redirect) at this host.
 
 The CA, the device ledger, the LG account with its pairings and the settings appliances notice (`hostname`,
-`legacy_tls`, `advertise_requested_host`, `bridge_dns`, the driver topic prefix) move over. External MQTT and its
+`legacy_tls`, `advertise_requested_host`, `bridge_dns`, the driver topic prefix) move over, and the listener ports
+are suggested. External MQTT and its
 retained-topic inventory stay behind. Different files already in `/config/rusthinq/` are never replaced.
 
 ## LG account
