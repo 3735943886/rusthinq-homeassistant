@@ -16,9 +16,6 @@ pip install rusthinq          # or: pipx install rusthinq / uv tool install rust
 rusthinq --version
 ```
 
-While rusthinq 0.2 is in pre-release, add `--pre` (pip, pipx) or `--prerelease allow` (uv), or pin an exact version
-such as `rusthinq==0.2.0rc8`.
-
 ## Run the daemon
 
 Create a CA once; appliances are provisioned to trust it, so keep both files:
@@ -74,7 +71,7 @@ The package does not start or supervise anything; it only tells you where the bi
 import subprocess
 import rusthinq
 
-print(rusthinq.RUSTHINQ_TAG)  # the rusthinq release these binaries come from, e.g. v0.2.0-rc8
+print(rusthinq.RUSTHINQ_TAG)  # the rusthinq release these binaries come from, e.g. v0.2.0
 daemon = subprocess.Popen([rusthinq.binary_path(), "config.toml"])
 subprocess.run([rusthinq.binary_path("rusthinqctl"), "health"], check=True)
 daemon.terminate()  # SIGTERM shuts rusthinq down cleanly
@@ -84,7 +81,7 @@ The [rusthinq Home Assistant integration](https://github.com/3735943886/rusthinq
 
 ## Versions
 
-Release `v0.2.0-rc8` is package `0.2.0rc8`; a `.postN` suffix means the same binaries repackaged.
+Release `v0.2.0` is package `0.2.0`; a `.postN` suffix means the same binaries repackaged.
 
 ## License and source
 

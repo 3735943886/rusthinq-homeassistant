@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "rusthinq release tag (e.g. v0.2.0-rc8)"
+        description: "rusthinq release tag (e.g. v0.2.0)"
         required: true
         type: string
       post:

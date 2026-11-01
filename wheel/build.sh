@@ -11,7 +11,7 @@ set -euo pipefail
 tag=$1 assets=$(realpath "$2") out=$3 post=${4:-}
 here=$(cd "$(dirname "$0")" && pwd)
 
-# v0.2.0-rc8 → 0.2.0rc8 (left to PEP 440 normalization)
+# the tag without its v, PEP 440-normalized (v0.2.0 → 0.2.0)
 version=$(python3 -c 'import sys; from packaging.version import Version; print(Version(sys.argv[1]))' "${tag#v}")
 if [ -n "$post" ]; then
     version="$version.post$post"

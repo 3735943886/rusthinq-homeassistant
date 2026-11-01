@@ -6,7 +6,7 @@ import stat
 from pathlib import Path
 
 __version__ = "0.0.0"  # build.sh substitutes the PEP 440 version
-RUSTHINQ_TAG = ""  # build.sh substitutes the source release tag (e.g. v0.2.0-rc8)
+RUSTHINQ_TAG = ""  # build.sh substitutes the source release tag (e.g. v0.2.0)
 SOURCE_URL = "https://github.com/3735943886/rusthinq"  # build.sh substitutes that tag's URL
 
 _BIN_DIR = Path(__file__).resolve().parent / "bin"
