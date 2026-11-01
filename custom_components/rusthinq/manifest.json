@@ -14,5 +14,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/3735943886/rusthinq-homeassistant/issues",
   "requirements": [],
-  "version": "0.0.0"
+  "version": "0.0.1"
 }
