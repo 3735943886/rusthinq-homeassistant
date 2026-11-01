@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.setup import async_setup_component
 
 from custom_components.rusthinq import embedded, migrate
 from custom_components.rusthinq.const import (
@@ -268,7 +267,6 @@ async def test_the_migrate_flow_installs_the_export_and_the_daemon_runs_on_it(
 
     monkeypatch.setattr("custom_components.rusthinq.config_flow.process_uploaded_file", uploaded)
 
-    await async_setup_component(hass, "ildevice", {})
     menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     menu = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate"})
     assert menu["step_id"] == "migrate"

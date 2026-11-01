@@ -1,7 +1,5 @@
 CLAUDE.md
 PLAN.md
 
-# ildevice-homeassistant, linked or copied in for tests (see tests/conftest.py)
-custom_components/ildevice
 __pycache__/
 .pytest_cache/

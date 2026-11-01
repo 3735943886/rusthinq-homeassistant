@@ -156,9 +156,6 @@ def test_an_https_port_behind_a_redirect_is_advertised_as_443():
 
 
 async def test_config_flow_checks_ports_and_allows_one_embedded_entry(hass, config_dir):
-    from homeassistant.setup import async_setup_component
-
-    await async_setup_component(hass, "ildevice", {})
     with socket.socket() as taken:
         taken.bind(("0.0.0.0", 0))
         taken.listen()

@@ -9,7 +9,6 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rusthinq.const import CONF_MODE, CONF_PREFIX, CONF_URL, DOMAIN, MODE_URL, PLATFORMS
@@ -48,7 +47,7 @@ async def setup(hass, server) -> MockConfigEntry:
 
 
 async def test_the_platforms_are_ildevices():
-    from custom_components.ildevice.const import PLATFORMS as ILDEVICE_PLATFORMS
+    from ildevice_ha.const import PLATFORMS as ILDEVICE_PLATFORMS
 
     assert PLATFORMS == ILDEVICE_PLATFORMS
 
@@ -93,7 +92,6 @@ async def test_unload(hass, air_conditioner):
 
 
 async def test_url_config_flow(hass, rusthinq):
-    await async_setup_component(hass, "ildevice", {})
     menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     result = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": MODE_URL})
     bad = await hass.config_entries.flow.async_configure(
@@ -118,7 +116,7 @@ async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):
 
 
 async def test_a_command_rusthinq_refuses_fires_the_rejection_event(hass, air_conditioner):
-    from custom_components.ildevice.const import EVENT_COMMAND_REJECTED
+    from ildevice_ha.const import EVENT_COMMAND_REJECTED
 
     events = []
     hass.bus.async_listen(EVENT_COMMAND_REJECTED, events.append)

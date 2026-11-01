@@ -27,13 +27,6 @@ jobs:
             requirements: pytest-homeassistant-custom-component==0.13.204 pycares==4.5.0
     steps:
       - uses: actions/checkout@v7
-      # The integration embeds ildevice-homeassistant, which users install separately; test against its release.
-      - uses: actions/checkout@v7
-        with:
-          repository: 3735943886/ildevice-homeassistant
-          ref: 0cf34b1b5be28c8211b0c06358f668dbb35cccf5 # v0.1.1
-          path: .ildevice-homeassistant
-      - run: cp -r .ildevice-homeassistant/custom_components/ildevice custom_components/
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}

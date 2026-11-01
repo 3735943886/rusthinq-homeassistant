@@ -48,7 +48,7 @@ PLATFORMS = [
     "vacuum",
     "valve",
 ]
-"""ildevice's platforms (`custom_components.ildevice.const.PLATFORMS`); each needs a module here."""
+"""ildevice's platforms (`ildevice_ha.const.PLATFORMS`); each needs a module here."""
 
 ENTRY_PLATFORMS = [*PLATFORMS, "update"]
 """What an entry forwards: ildevice's platforms and this integration's own `update` (the drivers of the embedded

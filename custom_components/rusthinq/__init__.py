@@ -2,8 +2,8 @@
 
 Home Assistant runs the rusthinq daemon (`embedded.EmbeddedDaemon`); its management API feeds an in-process IL
 transport (`client.ManagementClient`), and an ildevice-homeassistant hub embedded on that transport turns the IL
-devices into entities registered under this integration. ildevice-homeassistant is a separate integration (manifest
-`dependencies`); only its modules are used here.
+devices into entities registered under this integration. That hub is the `ildevice_ha` package of
+ildevice-homeassistant (manifest `requirements`); the IL device integration itself need not be installed.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from .retained import RetainedStore
 from .status import DeviceStatus
 
 if TYPE_CHECKING:
-    from custom_components.ildevice.hub import IlHub
+    from ildevice_ha.hub import IlHub
 
 
 @dataclass
@@ -66,9 +66,9 @@ def daemon_ports(data) -> dict[str, int]:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> bool:
-    from custom_components.ildevice.attach import build_hub
-    from custom_components.ildevice.const import CONF_AUTO_ADD, CONF_IL_PREFIX
-    from custom_components.ildevice.core.memory import InProcessTransport
+    from ildevice_ha.attach import build_hub
+    from ildevice_ha.const import CONF_AUTO_ADD, CONF_IL_PREFIX
+    from ildevice_ha.core.memory import InProcessTransport
 
     prefix = entry.data[CONF_PREFIX]
     daemon = None

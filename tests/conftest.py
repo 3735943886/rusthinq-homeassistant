@@ -1,5 +1,5 @@
-"""Tests need ildevice-homeassistant at custom_components/ildevice: a symlink to a checkout locally, a copy of the pinned
-release in CI (.github/workflows/test.yml)."""
+"""The ildevice hub comes from the `ildevice-homeassistant` package (`ildevice_ha`), a test requirement in
+pyproject.toml pinned like the manifest's."""
 
 import json
 from pathlib import Path

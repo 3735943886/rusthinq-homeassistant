@@ -10,15 +10,15 @@ instead of LG's cloud, and their drivers' output becomes Home Assistant devices 
 ## Requirements
 
 - Home Assistant 2025.1.3 or later.
-- [IL device](https://github.com/3735943886/ildevice-homeassistant), installed through HACS. This integration uses its
-  entity code; you do not need to set it up, and no MQTT broker is needed.
 - Appliances must reach this host on TCP 443 (see [Ports](#ports)) and be provisioned for rusthinq, or already be
   provisioned for an existing rusthinq that you move in.
 
 ## Installation
 
 1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/3735943886/rusthinq-homeassistant`
-   (category Integration). Install **IL device** and **rusthinq**, then restart Home Assistant.
+   (category Integration). Install **rusthinq**, then restart Home Assistant. Its entities come from
+   [IL device](https://github.com/3735943886/ildevice-homeassistant)'s code, which Home Assistant installs from PyPI
+   with it; the IL device integration itself is not needed.
 2. Settings → Devices & services → Add integration → **rusthinq**, and choose:
    - **Run rusthinq in Home Assistant** for a new installation, or
    - **Move an existing rusthinq into Home Assistant** to keep an installation you already run

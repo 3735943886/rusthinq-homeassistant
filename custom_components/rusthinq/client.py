@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 if TYPE_CHECKING:
-    from custom_components.ildevice.core.transport import Message, Transport, Unsubscribe
+    from ildevice_ha.core.transport import Message, Transport, Unsubscribe
 
 _LOGGER = logging.getLogger(__name__)
 
