@@ -100,7 +100,7 @@ async def test_diagnostics(hass, hass_client, air_conditioner):
     await eventually(hass, lambda: climate_entity(hass))
     entry_data = await diagnostics(hass, hass_client, entry.entry_id)
     assert entry_data["connected"] is True
-    assert entry_data["rusthinq"]["version"] == "0.2.0"
+    assert entry_data["rusthinq"]["version"] == "0.2.1"
     assert AC in entry_data["devices"]
 
     [device] = appliances(hass, entry)

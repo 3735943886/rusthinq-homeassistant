@@ -34,7 +34,7 @@ def no_github(monkeypatch):
 class StubDaemon:
     """Stands in for `EmbeddedDaemon`: the entry talks to the fake instead of a daemon of its own."""
 
-    version = "0.2.0"
+    version = "0.2.1"
     lines = ()
 
     def __init__(self, url: str) -> None:

@@ -5,7 +5,7 @@ without an MQTT broker or an add-on. Home Assistant runs the rusthinq daemon its
 instead of LG's cloud, and their drivers' output becomes Home Assistant devices and entities through an embedded
 [IL device](https://github.com/3735943886/ildevice-homeassistant) hub.
 
-**Status:** in development (rusthinq 0.2.0). Linux x86_64 and aarch64 hosts (Home Assistant OS, Container, Core).
+**Status:** in development (rusthinq 0.2.1). Linux x86_64 and aarch64 hosts (Home Assistant OS, Container, Core).
 
 ## Requirements
 
