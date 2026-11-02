@@ -12,13 +12,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .client import ManagementClient, ManagementError, basic_authorization
+from .client import ManagementClient, ManagementError
 from .const import (
     CONF_HTTPS_PORT,
     CONF_MODE,
@@ -27,7 +27,6 @@ from .const import (
     CONF_SETTINGS,
     CONF_THINQ1_HTTPS_PORT,
     CONF_THINQ1_PORT,
-    CONF_URL,
     DEFAULT_PORTS,
     DOMAIN,
     ENTRY_PLATFORMS,
@@ -45,17 +44,11 @@ if TYPE_CHECKING:
 class RusthinqData:
     hub: IlHub
     client: ManagementClient
-    daemon: EmbeddedDaemon | None
+    daemon: EmbeddedDaemon
     status: DeviceStatus
 
 
 type RusthinqConfigEntry = ConfigEntry[RusthinqData]
-
-
-def management_headers(data) -> dict[str, str]:
-    """The headers that authenticate to the management API of a URL entry, if it has a user."""
-    user = data.get(CONF_USERNAME)
-    return basic_authorization(user, data.get(CONF_PASSWORD) or "") if user else {}
 
 
 def daemon_ports(data) -> dict[str, int]:
@@ -70,28 +63,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     from ildevice_ha.const import CONF_AUTO_ADD, CONF_IL_PREFIX
     from ildevice_ha.core.memory import InProcessTransport
 
+    if entry.data.get(CONF_MODE) != MODE_EMBEDDED:
+        raise ConfigEntryError(
+            "Connecting to a rusthinq that runs elsewhere is no longer supported: delete this entry and use that "
+            "rusthinq's external MQTT with ildevice-homeassistant, or move it in with \"Move an existing rusthinq "
+            "into Home Assistant\""
+        )
     prefix = entry.data[CONF_PREFIX]
-    daemon = None
-    if entry.data.get(CONF_MODE) == MODE_EMBEDDED:
-        daemon = EmbeddedDaemon(hass, ports=daemon_ports(entry.data), prefix=prefix,
-                                settings=entry.data.get(CONF_SETTINGS))
-        try:
-            await daemon.async_start()
-        except DaemonError as err:
-            await daemon.async_stop()
-            if isinstance(err, PortsUnavailable):
-                ports_issue(hass, err.problems)
-            raise ConfigEntryNotReady(str(err)) from err
-        ports_issue(hass, None)
+    daemon = EmbeddedDaemon(hass, ports=daemon_ports(entry.data), prefix=prefix, settings=entry.data.get(CONF_SETTINGS))
+    try:
+        await daemon.async_start()
+    except DaemonError as err:
+        await daemon.async_stop()
+        if isinstance(err, PortsUnavailable):
+            ports_issue(hass, err.problems)
+        raise ConfigEntryNotReady(str(err)) from err
+    ports_issue(hass, None)
 
-        async def stop_daemon(_event: Event) -> None:
-            # Home Assistant does not unload entries when it stops.
-            await daemon.async_stop()
+    async def stop_daemon(_event: Event) -> None:
+        # Home Assistant does not unload entries when it stops.
+        await daemon.async_stop()
 
-        entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_daemon))
-        url, headers = daemon.url, daemon.headers
-    else:
-        url, headers = entry.data[CONF_URL], management_headers(entry.data)
+    entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_daemon))
 
     transport = InProcessTransport()
     # Every device of a rusthinq is the user's own appliance: add it, never offer it (ildevice's offers would go to
@@ -99,7 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) -> 
     hub = build_hub(hass, {CONF_IL_PREFIX: prefix, CONF_AUTO_ADD: True}, transport, DOMAIN, entry.entry_id)
     retained = RetainedStore(hass, entry.entry_id, transport, prefix)
     await retained.async_restore()
-    client = ManagementClient(async_get_clientsession(hass), url, transport, prefix, headers=headers)
+    client = ManagementClient(async_get_clientsession(hass), daemon.url, transport, prefix, headers=daemon.headers)
     entry.async_on_unload(await retained.start(client))
     status = DeviceStatus(hass, entry, client)
     entry.async_on_unload(status.start())
@@ -116,8 +109,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: RusthinqConfigEntry) ->
     unloaded = await hass.config_entries.async_unload_platforms(entry, ENTRY_PLATFORMS)
     if unloaded:
         await data.hub.async_stop()
-    if data.daemon is not None:
-        await data.daemon.async_stop()
+    await data.daemon.async_stop()
     return unloaded
 
 

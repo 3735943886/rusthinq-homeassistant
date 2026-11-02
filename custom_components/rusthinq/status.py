@@ -47,13 +47,12 @@ def _signal(entry_id: str) -> str:
 
 def service_device(entry: RusthinqConfigEntry) -> DeviceInfo:
     """The device that stands for the daemon itself."""
-    daemon = entry.runtime_data.daemon
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
         name="rusthinq",
         manufacturer="rusthinq",
-        model="Embedded daemon" if daemon else "Management API",
-        sw_version=daemon.version if daemon else None,
+        model="Embedded daemon",
+        sw_version=entry.runtime_data.daemon.version,
         entry_type=DeviceEntryType.SERVICE,
         configuration_url="https://github.com/3735943886/rusthinq",
     )

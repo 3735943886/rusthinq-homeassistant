@@ -30,8 +30,7 @@ PARALLEL_UPDATES = 1
 async def async_setup_entry(
     hass: HomeAssistant, entry: RusthinqConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    if entry.runtime_data.daemon is not None:
-        async_add_entities([ScriptsUpdate(entry)])
+    async_add_entities([ScriptsUpdate(entry)])
 
 
 def _short(sha: str | None) -> str | None:

@@ -3,14 +3,14 @@
 import asyncio
 
 import pytest
-from conftest import AC
+from conftest import AC, EMBEDDED
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rusthinq import client as client_module
-from custom_components.rusthinq.const import CONF_PREFIX, CONF_URL, DOMAIN
+from custom_components.rusthinq.const import DOMAIN, MODE_EMBEDDED
 
 
 @pytest.fixture(autouse=True)
@@ -36,8 +36,8 @@ def state(hass, device: str, key: str):
     return hass.states.get(eid) if eid else None
 
 
-async def setup(hass, server) -> MockConfigEntry:
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: server.url, CONF_PREFIX: "rusthinq"})
+async def setup(hass) -> MockConfigEntry:
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data=EMBEDDED)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -45,7 +45,7 @@ async def setup(hass, server) -> MockConfigEntry:
 
 
 async def test_each_device_shows_its_connection_bridge_driver_and_firmware(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     await eventually(hass, lambda: state(hass, AC, "firmware") and state(hass, AC, "bridge"))
     assert state(hass, AC, "local").state == STATE_ON
     assert state(hass, AC, "local").attributes["platform"] == "ThinQ2"
@@ -68,7 +68,7 @@ async def test_each_device_shows_its_connection_bridge_driver_and_firmware(hass,
 
 
 async def test_a_connection_event_rereads_the_status(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     await eventually(hass, lambda: state(hass, AC, "local") and state(hass, AC, "local").state == STATE_ON)
     await eventually(hass, lambda: air_conditioner.device_reads)  # the read after connecting, for the LG account
     await asyncio.sleep(0.1)
@@ -87,7 +87,7 @@ async def test_a_connection_event_rereads_the_status(hass, air_conditioner):
 async def test_a_device_without_a_driver_gets_a_device_and_a_problem(hass, rusthinq):
     rusthinq.add_device("washer-1", [], mapped=False, name="세탁기", modelName="F24VDD", bridgeEnabled=False,
                         bridged=False)
-    await setup(hass, rusthinq)
+    await setup(hass)
     await eventually(hass, lambda: state(hass, "washer-1", "driver"))
     assert state(hass, "washer-1", "driver").state == STATE_ON
     device = dr.async_get(hass).async_get(er.async_get(hass).async_get(entity_id(hass, "washer-1", "driver")).device_id)
@@ -95,7 +95,7 @@ async def test_a_device_without_a_driver_gets_a_device_and_a_problem(hass, rusth
 
 
 async def test_the_status_is_unavailable_while_the_daemon_is_unreachable(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     await eventually(hass, lambda: state(hass, AC, "local") and state(hass, AC, "local").state == STATE_ON)
     await air_conditioner.stop()
     await eventually(hass, lambda: state(hass, AC, "local").state == STATE_UNAVAILABLE)

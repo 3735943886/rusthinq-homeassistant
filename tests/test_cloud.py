@@ -3,14 +3,14 @@
 import asyncio
 
 import pytest
-from conftest import AC
+from conftest import AC, EMBEDDED
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rusthinq import client as client_module
-from custom_components.rusthinq.const import CONF_PREFIX, CONF_URL, DOMAIN
+from custom_components.rusthinq.const import DOMAIN, MODE_EMBEDDED
 
 
 @pytest.fixture(autouse=True)
@@ -34,8 +34,8 @@ def state(hass, platform: str, unique_id: str):
     return hass.states.get(eid) if eid else None
 
 
-async def setup(hass, server) -> MockConfigEntry:
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: server.url, CONF_PREFIX: "rusthinq"})
+async def setup(hass) -> MockConfigEntry:
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data=EMBEDDED)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -44,7 +44,7 @@ async def setup(hass, server) -> MockConfigEntry:
 
 
 async def test_signing_in_and_out_through_the_options(hass, air_conditioner):
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     account = f"{entry.entry_id}-lg-account"
     assert state(hass, "binary_sensor", account).state == STATE_OFF
 
@@ -72,7 +72,7 @@ async def test_signing_in_and_out_through_the_options(hass, air_conditioner):
 
 
 async def test_a_refused_sign_in_says_why(hass, air_conditioner):
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     menu = await hass.config_entries.options.async_init(entry.entry_id)
     form = await hass.config_entries.options.async_configure(menu["flow_id"], {"next_step_id": "login"})
     paste = await hass.config_entries.options.async_configure(form["flow_id"], {"country": "KR"})
@@ -84,7 +84,7 @@ async def test_a_refused_sign_in_says_why(hass, air_conditioner):
 
 
 async def test_the_bridge_switch_enables_and_disables(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     switch = entity(hass, "switch", f"{AC}-rusthinq-bridge-enabled")
     await eventually(hass, lambda: hass.states.get(switch).state == STATE_ON)
     await hass.services.async_call("switch", "turn_off", {"entity_id": switch}, blocking=True)
@@ -96,7 +96,7 @@ async def test_the_bridge_switch_enables_and_disables(hass, air_conditioner):
 async def test_pair_and_unpair(hass, air_conditioner):
     air_conditioner.devices[AC].update(name="거실에어컨")
     air_conditioner.account.update(loggedIn=True, country="KR")
-    await setup(hass, air_conditioner)
+    await setup(hass)
     pair, unpair = (entity(hass, "button", f"{AC}-rusthinq-bridge-{a}") for a in ("pair", "unpair"))
     switch = entity(hass, "switch", f"{AC}-rusthinq-bridge-enabled")
     await eventually(hass, lambda: hass.states.get(unpair).state != STATE_UNAVAILABLE)
@@ -113,14 +113,14 @@ async def test_pair_and_unpair(hass, air_conditioner):
 
 async def test_pairing_needs_an_lg_account(hass, air_conditioner):
     air_conditioner.devices[AC].update(bridgePaired=False, bridgeEnabled=False, bridged=False)
-    await setup(hass, air_conditioner)
+    await setup(hass)
     pair = entity(hass, "button", f"{AC}-rusthinq-bridge-pair")
     await eventually(hass, lambda: hass.states.get(pair) is not None)
     assert hass.states.get(pair).state == STATE_UNAVAILABLE
 
 
 async def test_a_refused_bridge_action_raises(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     switch = entity(hass, "switch", f"{AC}-rusthinq-bridge-enabled")
     await eventually(hass, lambda: hass.states.get(switch).state == STATE_ON)
     air_conditioner.cloud_failure = (409, "Rejected")

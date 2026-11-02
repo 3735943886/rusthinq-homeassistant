@@ -31,7 +31,7 @@ async def go_offline(hass, server) -> None:
 
 async def test_an_offline_appliance_is_forgotten_in_rusthinq_and_leaves(hass, hass_ws_client, air_conditioner):
     await async_setup_component(hass, "config", {})
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     await go_offline(hass, air_conditioner)
     [device] = appliances(hass, entry)
@@ -47,7 +47,7 @@ async def test_an_offline_appliance_is_forgotten_in_rusthinq_and_leaves(hass, ha
 
 async def test_a_connected_appliance_is_refused_since_it_would_come_back(hass, hass_ws_client, air_conditioner):
     await async_setup_component(hass, "config", {})
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     [device] = appliances(hass, entry)
 
@@ -60,7 +60,7 @@ async def test_a_connected_appliance_is_refused_since_it_would_come_back(hass, h
 
 async def test_rusthinqs_refusal_is_shown_and_the_device_stays(hass, hass_ws_client, air_conditioner):
     await async_setup_component(hass, "config", {})
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     await go_offline(hass, air_conditioner)
     [device] = appliances(hass, entry)
@@ -75,7 +75,7 @@ async def test_rusthinqs_refusal_is_shown_and_the_device_stays(hass, hass_ws_cli
 
 async def test_the_rusthinq_device_cannot_be_deleted(hass, hass_ws_client, air_conditioner):
     await async_setup_component(hass, "config", {})
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
 
     def service():
         return next((d for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
@@ -96,7 +96,7 @@ async def diagnostics(hass, hass_client, path: str) -> dict:
 
 
 async def test_diagnostics(hass, hass_client, air_conditioner):
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     entry_data = await diagnostics(hass, hass_client, entry.entry_id)
     assert entry_data["connected"] is True

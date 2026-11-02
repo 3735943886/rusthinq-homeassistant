@@ -4,11 +4,11 @@ DOMAIN = "rusthinq"
 
 CONF_MODE = "mode"
 MODE_EMBEDDED = "embedded"
-"""Home Assistant runs the daemon (the normal setup)."""
-MODE_URL = "url"
-"""A daemon already running at `CONF_URL` (development; entries without `CONF_MODE` are this)."""
+"""Home Assistant runs the daemon; the only kind of entry. Entries without `CONF_MODE` were development entries on
+a daemon running at `CONF_URL`, which are no longer set up."""
 
 CONF_URL = "url"
+"""The management API of the old rusthinq a backup is copied from (`migrate_fetch`)."""
 CONF_PREFIX = "prefix"
 CONF_HTTPS_PORT = "https_port"
 CONF_MQTT_PORT = "mqtt_port"

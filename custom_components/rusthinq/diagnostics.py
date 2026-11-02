@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from . import RusthinqConfigEntry
 from .client import ManagementError
 from .const import DOMAIN
-
-TO_REDACT = {CONF_USERNAME, CONF_PASSWORD}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: RusthinqConfigEntry) -> dict[str, Any]:
@@ -25,8 +21,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Rusthin
         rusthinq = {"error": str(err)}
     daemon = data.daemon
     return {
-        "entry": async_redact_data(dict(entry.data), TO_REDACT),
-        "daemon": None if daemon is None else {"version": daemon.version, "log": list(daemon.lines)},
+        "entry": dict(entry.data),
+        "daemon": {"version": daemon.version, "log": list(daemon.lines)},
         "connected": client.connected.is_set(),
         "features": client.features,
         "account": client.account,

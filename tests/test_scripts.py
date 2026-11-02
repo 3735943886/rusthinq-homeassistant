@@ -150,15 +150,3 @@ async def test_the_update_entity_installs_upstream_and_the_daemon_reloads(hass, 
             await asyncio.sleep(0.1)
     assert entry.runtime_data.daemon._proc.pid == pid  # reloaded, not restarted
     assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-async def test_a_url_entry_has_no_update_entity(hass, enable_custom_integrations, air_conditioner):
-    from custom_components.rusthinq.const import CONF_URL, MODE_URL
-
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_MODE: MODE_URL, CONF_URL: air_conditioner.url,
-                                                 CONF_PREFIX: "rusthinq"})
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.async_entity_ids("update") == []
-    assert await hass.config_entries.async_unload(entry.entry_id)

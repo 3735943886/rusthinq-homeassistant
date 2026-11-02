@@ -1,5 +1,6 @@
 """Config flow: Home Assistant runs rusthinq (embedded), from scratch or from an existing installation's backup
-(`migrate.py`), or connects to a running one (development).
+(`migrate.py`). A rusthinq that keeps running elsewhere reaches Home Assistant through its external MQTT and
+ildevice-homeassistant instead; attaching this integration to it as well would only add its devices twice.
 
 Moving an installation in takes its backup either straight from the old daemon (`GET /api/backup`) or as an uploaded
 file, shows what it holds, and installs it once the ports are free and, for a fetched backup, the old daemon has been
@@ -31,8 +32,8 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util import dt as dt_util
 
-from . import daemon_ports, management_headers, migrate
-from .client import REQUEST_TIMEOUT, ManagementError
+from . import daemon_ports, migrate
+from .client import ManagementError, basic_authorization
 from .const import (
     CONF_ARCHIVE,
     CONF_HTTPS_PORT,
@@ -46,7 +47,6 @@ from .const import (
     DEFAULT_URL,
     DOMAIN,
     MODE_EMBEDDED,
-    MODE_URL,
 )
 from .embedded import busy_ports, data_dir
 
@@ -57,6 +57,12 @@ STEP_FETCH = "migrate_fetch"
 STEP_UPLOAD = "migrate_upload"
 STEP_CONFIRM = "migrate_confirm"
 PROBE_TIMEOUT = aiohttp.ClientTimeout(total=3)
+
+
+def management_headers(data) -> dict[str, str]:
+    """The headers that authenticate to an old rusthinq's management API (`migrate_fetch`), if it has a user."""
+    user = data.get(CONF_USERNAME)
+    return basic_authorization(user, data.get(CONF_PASSWORD) or "") if user else {}
 
 
 class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -73,9 +79,7 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
         return LgAccountFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        # Home Assistant's advanced mode is deprecated (2026.9), so the development entry cannot be hidden behind it;
-        # it is labelled as such instead.
-        return self.async_show_menu(step_id="user", menu_options=[MODE_EMBEDDED, STEP_MIGRATE, MODE_URL])
+        return self.async_show_menu(step_id="user", menu_options=[MODE_EMBEDDED, STEP_MIGRATE])
 
     async def async_step_embedded(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(MODE_EMBEDDED)
@@ -209,44 +213,6 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
             placeholders["problems"] = "; ".join(problems)
             return False
         return True
-
-    async def async_step_url(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            user_input = {**user_input, CONF_MODE: MODE_URL, CONF_URL: user_input[CONF_URL].rstrip("/"),
-                          CONF_PREFIX: user_input[CONF_PREFIX].strip("/")}
-            await self.async_set_unique_id(user_input[CONF_URL])
-            self._abort_if_unique_id_configured()
-            if not user_input[CONF_PREFIX]:
-                errors[CONF_PREFIX] = "invalid_prefix"
-            elif error := await self._check(user_input):
-                errors["base"] = error
-            else:
-                return self.async_create_entry(title=user_input[CONF_URL], data=user_input)
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_URL, default=DEFAULT_URL): str,
-                vol.Optional(CONF_USERNAME): str,
-                vol.Optional(CONF_PASSWORD): str,
-                vol.Required(CONF_PREFIX, default=DEFAULT_PREFIX): str,
-            }
-        )
-        return self.async_show_form(
-            step_id="url", data_schema=self.add_suggested_values_to_schema(schema, user_input), errors=errors
-        )
-
-    async def _check(self, data: dict[str, Any]) -> str | None:
-        try:
-            async with async_get_clientsession(self.hass).get(
-                f"{data[CONF_URL]}/api/devices", headers=management_headers(data), timeout=REQUEST_TIMEOUT
-            ) as response:
-                if response.status == 401:
-                    return "invalid_auth"
-                response.raise_for_status()
-                await response.json()
-        except (aiohttp.ClientError, TimeoutError, ValueError):
-            return "cannot_connect"
-        return None
 
 
 def _ports_schema() -> vol.Schema:

@@ -303,7 +303,7 @@ async def test_the_migrate_flow_installs_the_export_and_the_daemon_runs_on_it(
 
 
 async def test_the_backup_is_fetched_from_the_old_daemon_which_must_be_stopped_before_it_is_installed(
-    hass, tmp_path, old_backup, rusthinq, enable_custom_integrations, monkeypatch
+    hass, tmp_path, old_backup, old_rusthinq, enable_custom_integrations, monkeypatch
 ):
     hass.config.config_dir = str(tmp_path)
     monkeypatch.setattr("custom_components.rusthinq.async_setup_entry", _set_up)
@@ -311,17 +311,17 @@ async def test_the_backup_is_fetched_from_the_old_daemon_which_must_be_stopped_b
     menu = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate"})
     form = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate_fetch"})
     assert form["step_id"] == "migrate_fetch"
-    source = {"url": rusthinq.url + "/", "username": "admin", "password": "secret"}
+    source = {"url": old_rusthinq.url + "/", "username": "admin", "password": "secret"}
 
     form = await hass.config_entries.flow.async_configure(form["flow_id"], source)
     assert form["errors"] == {"base": "backup_unsupported"}  # an older daemon answers with its dashboard
 
-    rusthinq.backup_refusal = "set [management] user and password"
+    old_rusthinq.backup_refusal = "set [management] user and password"
     form = await hass.config_entries.flow.async_configure(form["flow_id"], source)
     assert form["errors"] == {"base": "backup_refused"}
     assert form["description_placeholders"]["problems"] == "set [management] user and password"
 
-    rusthinq.backup_refusal, rusthinq.backup = None, old_backup
+    old_rusthinq.backup_refusal, old_rusthinq.backup = None, old_backup
     confirm = await hass.config_entries.flow.async_configure(form["flow_id"], source)
     assert confirm["step_id"] == "migrate_confirm", confirm
     assert {k: confirm["description_placeholders"][k] for k in ("hostname", "devices", "account", "rusthinq")} == {
@@ -333,7 +333,7 @@ async def test_the_backup_is_fetched_from_the_old_daemon_which_must_be_stopped_b
     assert again["errors"] == {"base": "source_running"}
     assert not (tmp_path / DOMAIN / "ca.key").exists()
 
-    await rusthinq.stop()
+    await old_rusthinq.stop()
     done = await hass.config_entries.flow.async_configure(confirm["flow_id"], ports)
     assert done["type"] == "create_entry", done
     assert done["data"][CONF_PREFIX] == "rusthinq"
@@ -342,20 +342,20 @@ async def test_the_backup_is_fetched_from_the_old_daemon_which_must_be_stopped_b
     assert (tmp_path / DOMAIN / "devices-v2.json").stat().st_mode & 0o777 == 0o600
 
 
-async def test_fetching_needs_the_management_credentials(hass, rusthinq, enable_custom_integrations, monkeypatch):
+async def test_fetching_needs_the_management_credentials(hass, old_rusthinq, enable_custom_integrations, monkeypatch):
     async def unauthorized(_request):
         from aiohttp import web
 
         return web.json_response({"error": "unauthorized"}, status=401)
 
-    monkeypatch.setattr(rusthinq, "_backup", unauthorized)
-    rusthinq.backup = b""
-    await rusthinq.stop()
-    await rusthinq.start()
+    monkeypatch.setattr(old_rusthinq, "_backup", unauthorized)
+    old_rusthinq.backup = b""
+    await old_rusthinq.stop()
+    await old_rusthinq.start()
     menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     menu = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate"})
     form = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": "migrate_fetch"})
-    form = await hass.config_entries.flow.async_configure(form["flow_id"], {"url": rusthinq.url})
+    form = await hass.config_entries.flow.async_configure(form["flow_id"], {"url": old_rusthinq.url})
     assert form["errors"] == {"base": "invalid_auth"}
     form = await hass.config_entries.flow.async_configure(form["flow_id"], {"url": "http://127.0.0.1:9"})
     assert form["errors"] == {"base": "cannot_connect"}

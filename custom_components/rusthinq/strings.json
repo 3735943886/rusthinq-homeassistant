@@ -5,8 +5,7 @@
         "title": "rusthinq",
         "menu_options": {
           "embedded": "Run rusthinq in Home Assistant",
-          "migrate": "Move an existing rusthinq into Home Assistant",
-          "url": "Connect to a running rusthinq (development)"
+          "migrate": "Move an existing rusthinq into Home Assistant"
         }
       },
       "embedded": {
@@ -19,20 +18,6 @@
         "data_description": {
           "https_port": "Where appliances are provisioned and register (443 unless a redirect points here)",
           "mqtt_port": "Announced to appliances when they register; any free port works"
-        }
-      },
-      "url": {
-        "title": "rusthinq management API",
-        "description": "Connect to a rusthinq that is already running. For development: devices that also reach Home Assistant through MQTT would appear twice.",
-        "data": {
-          "url": "URL",
-          "username": "Username",
-          "password": "Password",
-          "prefix": "Topic prefix"
-        },
-        "data_description": {
-          "url": "Base URL of the management API, for example http://127.0.0.1:44401",
-          "prefix": "rusthinq's `[drivers] topic_prefix`"
         }
       },
       "migrate": {
@@ -85,7 +70,6 @@
     "error": {
       "cannot_connect": "Could not reach the management API.",
       "invalid_auth": "The management API rejected the username or password.",
-      "invalid_prefix": "The topic prefix must not be empty.",
       "duplicate_ports": "Each listener needs its own port.",
       "ports_unavailable": "These ports cannot be used: {problems}",
       "invalid_archive": "The backup cannot be imported: {problems}",

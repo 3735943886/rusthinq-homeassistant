@@ -4,13 +4,13 @@ import asyncio
 import json
 
 import pytest
-from conftest import AC, load
+from conftest import AC, EMBEDDED, load
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rusthinq import retained as retained_module
-from custom_components.rusthinq.const import CONF_PREFIX, CONF_URL, DOMAIN
+from custom_components.rusthinq.const import DOMAIN, MODE_EMBEDDED
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ def stored(hass_storage, entry) -> dict:
 
 
 async def test_an_appliance_that_is_off_keeps_its_entities_across_a_restart(hass, hass_storage, air_conditioner):
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: air_conditioner.url, CONF_PREFIX: "rusthinq"})
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data=EMBEDDED)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await eventually(hass, lambda: climate(hass) and climate(hass).state != STATE_UNAVAILABLE)
@@ -61,7 +61,7 @@ async def test_devices_rusthinq_forgot_are_not_kept(hass, hass_storage, air_cond
     gone = "00000000-0000-0000-0000-00000000dead"
     descriptor = json.loads(next(p["payload"] for p in load("air_conditioner.json")["publications"]
                                  if p["topic"].endswith("/descriptor")))
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: air_conditioner.url, CONF_PREFIX: "rusthinq"})
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data=EMBEDDED)
     hass_storage[f"{DOMAIN}.{entry.entry_id}.retained"] = {"version": 1, "minor_version": 1, "key": "x", "data": {
         f"rusthinq/{gone}/descriptor": json.dumps({**descriptor, "id": gone}),
         f"rusthinq/{gone}/available": "true",

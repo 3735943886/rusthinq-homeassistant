@@ -4,14 +4,14 @@ import asyncio
 import json
 
 import pytest
-from conftest import AC
+from conftest import AC, EMBEDDED
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.rusthinq.const import CONF_MODE, CONF_PREFIX, CONF_URL, DOMAIN, MODE_URL, PLATFORMS
+from custom_components.rusthinq.const import DOMAIN, MODE_EMBEDDED, PLATFORMS
 
 
 @pytest.fixture(autouse=True)
@@ -38,8 +38,8 @@ def appliances(hass, entry) -> list:
             if d.entry_type is not dr.DeviceEntryType.SERVICE]
 
 
-async def setup(hass, server) -> MockConfigEntry:
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_URL: server.url, CONF_PREFIX: "rusthinq"})
+async def setup(hass) -> MockConfigEntry:
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=MODE_EMBEDDED, data=EMBEDDED)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -53,7 +53,7 @@ async def test_the_platforms_are_ildevices():
 
 
 async def test_a_device_appears_under_this_domain_and_takes_commands(hass, air_conditioner):
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass) and hass.states.get(climate_entity(hass)))
     entity_id = climate_entity(hass)
     state = hass.states.get(entity_id)
@@ -75,7 +75,7 @@ async def test_a_device_appears_under_this_domain_and_takes_commands(hass, air_c
 
 
 async def test_entities_are_unavailable_while_the_daemon_is_unreachable(hass, air_conditioner):
-    await setup(hass, air_conditioner)
+    await setup(hass)
     await eventually(hass, lambda: climate_entity(hass) and hass.states.get(climate_entity(hass)))
     entity_id = climate_entity(hass)
     await air_conditioner.stop()
@@ -83,7 +83,7 @@ async def test_entities_are_unavailable_while_the_daemon_is_unreachable(hass, ai
 
 
 async def test_unload(hass, air_conditioner):
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
@@ -91,25 +91,22 @@ async def test_unload(hass, air_conditioner):
     assert hass.states.get(climate_entity(hass)).state == STATE_UNAVAILABLE
 
 
-async def test_url_config_flow(hass, rusthinq):
+async def test_the_config_flow_offers_no_connection_to_a_running_rusthinq(hass):
     menu = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    result = await hass.config_entries.flow.async_configure(menu["flow_id"], {"next_step_id": MODE_URL})
-    bad = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_URL: "http://127.0.0.1:1", CONF_PREFIX: "rusthinq"}
-    )
-    assert bad["errors"] == {"base": "cannot_connect"}
-    done = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_URL: rusthinq.url + "/", CONF_PREFIX: "/rusthinq/"}
-    )
-    assert done["type"] == "create_entry"
-    assert done["data"] == {CONF_MODE: MODE_URL, CONF_URL: rusthinq.url, CONF_PREFIX: "rusthinq"}
-    await hass.async_block_till_done()
-    assert await hass.config_entries.async_unload(done["result"].entry_id)
+    assert menu["menu_options"] == ["embedded", "migrate"]
+
+
+async def test_an_old_url_entry_is_not_set_up(hass, rusthinq):
+    entry = MockConfigEntry(domain=DOMAIN, data={"url": rusthinq.url, "prefix": "rusthinq"})
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert "no longer supported" in entry.reason
 
 
 async def test_the_device_is_named_after_rusthinqs_name(hass, air_conditioner):
     air_conditioner.devices[AC]["name"] = "거실에어컨"
-    entry = await setup(hass, air_conditioner)
+    entry = await setup(hass)
     await eventually(hass, lambda: climate_entity(hass))
     devices = appliances(hass, entry)
     assert [d.name for d in devices] == ["거실에어컨"]
@@ -120,7 +117,7 @@ async def test_a_command_rusthinq_refuses_fires_the_rejection_event(hass, air_co
 
     events = []
     hass.bus.async_listen(EVENT_COMMAND_REJECTED, events.append)
-    await setup(hass, air_conditioner)
+    await setup(hass)
     await eventually(hass, lambda: climate_entity(hass) and hass.states.get(climate_entity(hass)))
     air_conditioner.cloud_failure = (503, "shutting down")
     await hass.services.async_call("climate", "set_temperature", {"entity_id": climate_entity(hass),
