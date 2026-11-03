@@ -8,7 +8,7 @@ dependencies = []
 # Pinned like ildevice-homeassistant's, so both test against the same Home Assistant.
 test = [
     "pytest-homeassistant-custom-component==0.13.366",
-    "rusthinq==0.2.1",  # the embedded tests run the real daemon; keep equal to const.REQUIREMENT
+    "rusthinq==0.2.2rc2",  # the embedded tests run the real daemon; keep equal to const.REQUIREMENT
     "ildevice-homeassistant==0.2.0",  # the ildevice hub; keep equal to the manifest's requirement
 ]
 
