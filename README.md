@@ -1,3 +1,5 @@
+<p align="center"><img src="custom_components/rusthinq/brand/icon.png" alt="" width="128" /></p>
+
 # rusthinq for Home Assistant
 
 Local control of LG ThinQ appliances in Home Assistant through [rusthinq](https://github.com/3735943886/rusthinq),
