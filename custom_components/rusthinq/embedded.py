@@ -30,9 +30,9 @@ from collections import deque
 from pathlib import Path
 
 import aiohttp
+from awesomeversion import AwesomeVersion
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from awesomeversion import AwesomeVersion
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.requirements import async_process_requirements

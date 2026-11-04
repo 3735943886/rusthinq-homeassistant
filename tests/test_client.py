@@ -6,8 +6,8 @@ import json
 import aiohttp
 import pytest
 from conftest import AC
-
 from ildevice_ha.core.memory import InProcessTransport
+
 from custom_components.rusthinq.client import ManagementClient
 
 PREFIX = "rusthinq"

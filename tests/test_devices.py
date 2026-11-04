@@ -4,9 +4,9 @@ import pytest
 from conftest import AC
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
+from test_init import appliances, climate_entity, eventually, setup
 
 from custom_components.rusthinq.const import DOMAIN
-from test_init import appliances, climate_entity, eventually, setup
 
 
 @pytest.fixture(autouse=True)

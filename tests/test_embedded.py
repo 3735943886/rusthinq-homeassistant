@@ -131,7 +131,8 @@ async def test_a_daemon_left_by_a_previous_start_is_stopped(hass, config_dir):
     assert await hass.config_entries.async_unload(entry.entry_id)
     # what a Home Assistant killed with SIGKILL leaves behind: the daemon, still running and holding its files'
     # locks, and its pidfile
-    orphan = subprocess.Popen([str(config_dir / "bin" / "rusthinq"), str(config)], stderr=subprocess.DEVNULL)
+    orphan = await hass.async_add_executor_job(
+        lambda: subprocess.Popen([str(config_dir / "bin" / "rusthinq"), str(config)], stderr=subprocess.DEVNULL))
     await asyncio.sleep(0.5)
     (config_dir / "rusthinq.pid").write_text(f"{orphan.pid}\n")
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -148,8 +149,8 @@ def test_half_a_ca_is_refused(tmp_path):
 
 
 def test_an_https_port_behind_a_redirect_is_advertised_as_443():
-    common = dict(mqtt_port=8883, thinq1_https_port=46030, thinq1_port=47878, prefix="rusthinq",
-                  management_port=40000, user="u", password='p"w')
+    common = {"mqtt_port": 8883, "thinq1_https_port": 46030, "thinq1_port": 47878, "prefix": "rusthinq",
+              "management_port": 40000, "user": "u", "password": 'p"w'}
     assert "https_advertise = 443" in embedded.render_config(https_port=8443, **common)
     assert "https_advertise" not in embedded.render_config(https_port=443, **common)
     assert 'password = "p\\"w"' in embedded.render_config(https_port=443, **common)
