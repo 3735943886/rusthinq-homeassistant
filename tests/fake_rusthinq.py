@@ -70,7 +70,7 @@ class FakeRusthinq:
                 "scriptGeneration": info["scriptGeneration"]}
 
     def state(self) -> dict[str, Any]:
-        return {"devices": self.devices, "version": "0.2.2-rc2", "management": True,
+        return {"devices": self.devices, "version": "0.2.2-rc4", "management": True,
                 "features": {"bridge": True, "scripting": True}}
 
     async def output(self, device: str, topic: str, payload: str, retain: bool = True) -> None:
@@ -125,7 +125,7 @@ class FakeRusthinq:
         return web.json_response({"status": "accepted", "incarnation": body["incarnation"]}, status=202)
 
     async def _diagnostics(self, request: web.Request) -> web.Response:
-        return web.json_response({"version": "0.2.2-rc2", "devices": self.devices,
+        return web.json_response({"version": "0.2.2-rc4", "devices": self.devices,
                                   "privacy": "No credentials, certificates or wire payloads are included."})
 
     async def _health(self, request: web.Request) -> web.Response:
