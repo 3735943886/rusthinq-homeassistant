@@ -27,7 +27,7 @@ jobs:
             requirements: pytest-homeassistant-custom-component==0.13.204 pycares==4.5.0
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - run: python -c 'import tomllib; print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["optional-dependencies"]["test"]))' > requirements-test.txt
