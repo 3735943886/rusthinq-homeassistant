@@ -8,10 +8,10 @@
   "dependencies": [
     "file_upload"
   ],
-  "documentation": "https://github.com/3735943886/rusthinq-homeassistant",
+  "documentation": "https://github.com/3735943886/rusthinq-local",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/3735943886/rusthinq-homeassistant/issues",
+  "issue_tracker": "https://github.com/3735943886/rusthinq-local/issues",
   "requirements": [
     "ildevice-homeassistant==0.2.0"
   ],

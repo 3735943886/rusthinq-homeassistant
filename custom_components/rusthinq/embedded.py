@@ -74,7 +74,7 @@ def ports_issue(hass: HomeAssistant, problems: list[str] | None) -> None:
     ir.async_create_issue(
         hass, DOMAIN, "ports_unavailable", is_fixable=False, severity=ir.IssueSeverity.ERROR,
         translation_key="ports_unavailable", translation_placeholders={"problems": "; ".join(problems)},
-        learn_more_url="https://github.com/3735943886/rusthinq-homeassistant#ports",
+        learn_more_url="https://github.com/3735943886/rusthinq-local#ports",
     )
 
 

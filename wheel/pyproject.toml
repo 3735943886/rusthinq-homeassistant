@@ -21,7 +21,7 @@ rusthinqctl = "rusthinq._cli:rusthinqctl"
 [project.urls]
 Homepage = "https://github.com/3735943886/rusthinq"
 Source = "https://github.com/3735943886/rusthinq"
-Packaging = "https://github.com/3735943886/rusthinq-homeassistant"
+Packaging = "https://github.com/3735943886/rusthinq-local"
 
 [tool.setuptools]
 packages = ["rusthinq"]

@@ -77,7 +77,7 @@ subprocess.run([rusthinq.binary_path("rusthinqctl"), "health"], check=True)
 daemon.terminate()  # SIGTERM shuts rusthinq down cleanly
 ```
 
-The [rusthinq Home Assistant integration](https://github.com/3735943886/rusthinq-homeassistant) uses it this way.
+The [rusthinq Home Assistant integration](https://github.com/3735943886/rusthinq-local) uses it this way.
 
 ## Versions
 
@@ -91,5 +91,5 @@ rusthinq is licensed under GPL-2.0-or-later; the full text is in `COPYING`. The 
 The complete corresponding source for every packaged release is the rusthinq git tag of the same name
 (`rusthinq.SOURCE_URL` points at it), and the release build is reproduced by that tag's
 `.github/workflows/release.yml` and `scripts/build-openssl.sh`. If that source is ever unavailable there, ask in the
-[packaging repository](https://github.com/3735943886/rusthinq-homeassistant/issues) and it will be provided for at
+[packaging repository](https://github.com/3735943886/rusthinq-local/issues) and it will be provided for at
 least three years after the release was published.

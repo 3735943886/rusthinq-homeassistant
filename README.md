@@ -17,7 +17,7 @@ instead of LG's cloud, and their drivers' output becomes Home Assistant devices 
 
 ## Installation
 
-1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/3735943886/rusthinq-homeassistant`
+1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/3735943886/rusthinq-local`
    (category Integration). Install **rusthinq**, then restart Home Assistant. Its entities come from
    [IL device](https://github.com/3735943886/ildevice-homeassistant)'s code, which Home Assistant installs from PyPI
    with it; the IL device integration itself is not needed.
