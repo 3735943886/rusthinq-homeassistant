@@ -1,6 +1,6 @@
 [project]
 name = "rusthinq-local"
-version = "0.0.9"
+version = "0.0.10"
 requires-python = ">=3.14"
 dependencies = []
 

@@ -54,12 +54,13 @@
       },
       "migrate_confirm": {
         "title": "Move this rusthinq in",
-        "description": "The backup holds:\n- host name: **{hostname}**\n- devices: **{devices}**\n- LG account: **{account}**\n- written by rusthinq {rusthinq} at {created}\n\n1. **Stop rusthinq on the old host now**, and keep it stopped: both would answer the same appliances and LG account.\n2. Check the ports, filled in with the old installation's, and submit.\n3. Point the appliances' route (DNS or redirect) at this host.",
+        "description": "The backup holds:\n- host name: **{hostname}**\n- devices: **{devices}**\n- LG account: **{account}**\n- written by rusthinq {rusthinq} at {created}\n\nExisting files that differ from this backup: **{conflicts}**\nOverwriting the CA may mean provisioning appliances again. Only files included in the backup are replaced; files absent from it are kept.\n\n1. **Stop rusthinq on the old host now**, and keep it stopped: both would answer the same appliances and LG account.\n2. Check the ports, filled in with the old installation's, and submit.\n3. Point the appliances' route (DNS or redirect) at this host.",
         "data": {
           "https_port": "HTTPS port",
           "mqtt_port": "MQTT port",
           "thinq1_https_port": "ThinQ1 HTTPS port",
-          "thinq1_port": "ThinQ1 port"
+          "thinq1_port": "ThinQ1 port",
+          "overwrite_existing": "Overwrite conflicting files included in the backup"
         },
         "data_description": {
           "https_port": "Where appliances are provisioned and register (443 unless a redirect points here)",
@@ -73,12 +74,20 @@
       "duplicate_ports": "Each listener needs its own port.",
       "ports_unavailable": "These ports cannot be used: {problems}",
       "invalid_archive": "The backup cannot be imported: {problems}",
+      "overwrite_required": "Select the confirmation box to overwrite. Files not included in the backup will not be deleted.",
       "backup_refused": "rusthinq refused the backup: {problems}",
       "backup_unsupported": "This rusthinq cannot hand out a backup (it needs 0.2.0 or later). Upload a file instead.",
       "source_running": "The old rusthinq at {problems} still answers. Stop it first."
     },
     "abort": {
       "already_configured": "rusthinq is already set up."
+    }
+  },
+  "entity": {
+    "button": {
+      "backup": {
+        "name": "Download backup"
+      }
     }
   },
   "issues": {
@@ -95,7 +104,8 @@
         "menu_options": {
           "login": "Sign in to LG",
           "logout": "Sign out",
-          "refresh": "Sign in again with the saved credentials"
+          "refresh": "Sign in again with the saved credentials",
+          "reset": "Reset rusthinq data"
         }
       },
       "login": {
@@ -118,15 +128,24 @@
       "logout": {
         "title": "Sign out of LG",
         "description": "rusthinq forgets the LG credentials. Bridged devices disconnect from LG until you sign in again; local control is unaffected."
+      },
+      "reset": {
+        "title": "Reset rusthinq data",
+        "description": "This removes the CA, device records, LG account, retained topics, and saved daemon settings. Appliances may need to be provisioned again. Download a backup first if you may need this data.",
+        "data": {
+          "confirm_reset": "I understand; erase rusthinq data and create a new CA"
+        }
       }
     },
     "error": {
-      "cloud_failed": "rusthinq could not do that: {problem}"
+      "cloud_failed": "rusthinq could not do that: {problem}",
+      "reset_required": "Select the confirmation box to reset rusthinq."
     },
     "abort": {
       "not_running": "rusthinq is not running.",
       "no_bridge": "This rusthinq has no LG bridge.",
-      "cloud_failed": "rusthinq could not do that: {problem}"
+      "cloud_failed": "rusthinq could not do that: {problem}",
+      "reset_failed": "rusthinq could not be restarted after reset."
     }
   },
   "exceptions": {

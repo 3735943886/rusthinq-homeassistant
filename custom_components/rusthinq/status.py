@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.button import ButtonEntity
 from homeassistant.components.sensor import SensorEntity
@@ -82,12 +83,16 @@ class DeviceStatus:
         self._known: set[str] = set()
         self._bridge_known: set[str] = set()
         self._account_added = False
+        self._backup_added = False
 
     def start(self) -> Callable[[], None]:
         return self.client.add_listener(self._changed)
 
     def register_platform(self, platform: str, add_entities: AddEntitiesCallback) -> None:
         self._adders[platform] = add_entities
+        if platform == "button" and not self._backup_added:
+            self._backup_added = True
+            add_entities([BackupButton(self._entry)])
         self._changed()
 
     @callback
@@ -147,6 +152,30 @@ class StatusEntity(Entity):
         self.async_on_remove(async_dispatcher_connect(
             self.hass, _signal(self._status._entry.entry_id), self.async_write_ha_state
         ))
+
+
+class BackupButton(ButtonEntity):
+    """Offer a direct, authenticated download link for a portable backup."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "backup"
+    _attr_icon = "mdi:download"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, entry: RusthinqConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}-backup"
+        self._attr_device_info = service_device(entry)
+
+    async def async_press(self) -> None:
+        link = f"/api/rusthinq/backup/{self._entry.entry_id}"
+        korean = self.hass.config.language.startswith("ko")
+        persistent_notification.async_create(
+            self.hass,
+            f"[백업 다운로드]({link})" if korean else f"[Download the rusthinq backup]({link})",
+            title="rusthinq 백업" if korean else "rusthinq backup",
+            notification_id=f"rusthinq_backup_{self._entry.entry_id}",
+        )
 
 
 class LocalConnection(StatusEntity, BinarySensorEntity):

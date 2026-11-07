@@ -51,6 +51,13 @@ class RusthinqData:
 type RusthinqConfigEntry = ConfigEntry[RusthinqData]
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    from .http import BackupView
+
+    hass.http.register_view(BackupView)
+    return True
+
+
 def daemon_ports(data) -> dict[str, int]:
     """The appliance-facing ports of an embedded entry, by listener name."""
     ports = {**DEFAULT_PORTS, **{k: v for k, v in data.items() if k in DEFAULT_PORTS}}

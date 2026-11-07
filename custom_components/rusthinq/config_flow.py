@@ -48,7 +48,8 @@ from .const import (
     DOMAIN,
     MODE_EMBEDDED,
 )
-from .embedded import busy_ports, data_dir
+from .embedded import busy_ports, data_dir, reset_data
+from .retained import RetainedStore
 
 PORT = vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))
 STEP_MIGRATE = "migrate"
@@ -56,6 +57,7 @@ STEP_MIGRATE = "migrate"
 STEP_FETCH = "migrate_fetch"
 STEP_UPLOAD = "migrate_upload"
 STEP_CONFIRM = "migrate_confirm"
+CONF_OVERWRITE = "overwrite_existing"
 PROBE_TIMEOUT = aiohttp.ClientTimeout(total=3)
 
 
@@ -147,10 +149,9 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
                                     description_placeholders=placeholders)
 
     async def _read(self, archive: bytes, errors: dict[str, str], placeholders: dict[str, str]) -> bool:
-        """Read an export into the flow, refusing one that cannot be installed here."""
+        """Read and validate an export, leaving any file conflicts for the confirmation step."""
         try:
             imported = await self.hass.async_add_executor_job(migrate.read_export, archive)
-            await self._check_conflicts(imported)
         except migrate.MigrateError as err:
             errors["base"] = "invalid_archive"
             placeholders["problems"] = str(err)
@@ -158,37 +159,40 @@ class RusthinqConfigFlow(ConfigFlow, domain=DOMAIN):
         self._imported = imported
         return True
 
-    async def _check_conflicts(self, imported: migrate.Imported) -> None:
-        directory = data_dir(self.hass)
-        if clash := await self.hass.async_add_executor_job(migrate.conflicts, directory, imported):
-            raise migrate.MigrateError(f"{directory} already holds a different {', '.join(clash)}")
-
     async def async_step_migrate_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """What the backup holds, and this host's ports, the old ones suggested. The backup stays in the flow, so a
         refused port or an old daemon still running only needs fixing, not another upload."""
         imported = self._imported
         assert imported is not None
         errors: dict[str, str] = {}
-        placeholders = {"problems": "", **_origin_placeholders(imported.origin)}
+        clash = await self.hass.async_add_executor_job(migrate.conflicts, data_dir(self.hass), imported)
+        placeholders = {
+            "problems": "",
+            "conflicts": ", ".join(clash) if clash else ("없음" if self.hass.config.language == "ko" else "none"),
+            **_origin_placeholders(imported.origin),
+        }
         if user_input is not None:
             settings = dict(imported.settings)
-            data = {CONF_MODE: MODE_EMBEDDED, **DEFAULT_PORTS, **imported.ports, **user_input,
+            ports = {key: user_input[key] for key in DEFAULT_PORTS}
+            data = {CONF_MODE: MODE_EMBEDDED, **DEFAULT_PORTS, **imported.ports, **ports,
                     CONF_PREFIX: settings.pop("topic_prefix", DEFAULT_PREFIX), CONF_SETTINGS: settings}
-            try:
-                await self._check_conflicts(imported)
-            except migrate.MigrateError as err:
-                errors["base"] = "invalid_archive"
-                placeholders["problems"] = str(err)
+            if clash and not user_input.get(CONF_OVERWRITE, False):
+                errors["base"] = "overwrite_required"
             else:
                 if self._source is not None and await self._answers(self._source):
                     errors["base"] = "source_running"
                     placeholders["problems"] = self._source[CONF_URL]
                 elif await self._ports_ok(data, errors, placeholders):
-                    await self.hass.async_add_executor_job(migrate.install, data_dir(self.hass), imported)
+                    await self.hass.async_add_executor_job(
+                        migrate.install, data_dir(self.hass), imported, bool(clash)
+                    )
                     return self.async_create_entry(title="rusthinq", data=data)
+        schema = {vol.Required(key): PORT for key in DEFAULT_PORTS}
+        if clash:
+            schema[vol.Required(CONF_OVERWRITE, default=False)] = bool
         return self.async_show_form(
             step_id=STEP_CONFIRM, data_schema=self.add_suggested_values_to_schema(
-                vol.Schema({vol.Required(key): PORT for key in DEFAULT_PORTS}),
+                vol.Schema(schema),
                 user_input or {**DEFAULT_PORTS, **imported.ports}),
             errors=errors, description_placeholders=placeholders,
         )
@@ -222,6 +226,10 @@ def _ports_schema() -> vol.Schema:
             vol.Required(CONF_MQTT_PORT, default=DEFAULT_PORTS[CONF_MQTT_PORT]): PORT,
         }
     )
+
+
+def _reset_schema() -> vol.Schema:
+    return vol.Schema({vol.Required("confirm_reset", default=False): bool})
 
 
 def _read_upload(hass, file_id: str) -> bytes:
@@ -263,20 +271,47 @@ class LgAccountFlow(OptionsFlow):
         return self.async_create_entry(data=dict(self.config_entry.options))
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        if self.config_entry.state is not ConfigEntryState.LOADED or not self._client.connected.is_set():
+        if self.config_entry.state is not ConfigEntryState.LOADED:
             return self.async_abort(reason="not_running")
-        if not self._client.features.get("bridge"):
-            return self.async_abort(reason="no_bridge")
         account = self._client.account
         signed_in = bool(account.get("loggedIn"))
+        menu_options = (["logout", "refresh"] if signed_in else ["login"])
+        if not self._client.features.get("bridge"):
+            menu_options = []
         return self.async_show_menu(
             step_id="init",
-            menu_options=["logout", "refresh"] if signed_in else ["login"],
+            menu_options=menu_options + ["reset"],
             description_placeholders={
                 "state": f"signed in ({account.get('country') or '?'})" if signed_in else "not signed in",
                 "error": account.get("error") or "none",
             },
         )
+
+    async def async_step_reset(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Clear rusthinq state and start again with a newly generated CA."""
+        if user_input is not None:
+            if not user_input.get("confirm_reset", False):
+                return self.async_show_form(
+                    step_id="reset", data_schema=_reset_schema(), errors={"base": "reset_required"}
+                )
+            entry = self.config_entry
+            if not await self.hass.config_entries.async_unload(entry.entry_id):
+                return self.async_abort(reason="reset_failed")
+            await self.hass.async_add_executor_job(reset_data, data_dir(self.hass))
+            await RetainedStore.async_remove(self.hass, entry.entry_id)
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    CONF_MODE: MODE_EMBEDDED,
+                    CONF_PREFIX: DEFAULT_PREFIX,
+                    **{key: entry.data.get(key, value) for key, value in DEFAULT_PORTS.items()},
+                },
+                options={},
+            )
+            if not await self.hass.config_entries.async_reload(entry.entry_id):
+                return self.async_abort(reason="reset_failed")
+            return self.async_create_entry(data={})
+        return self.async_show_form(step_id="reset", data_schema=_reset_schema())
 
     async def async_step_login(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 
+from custom_components.rusthinq import backup as backup_module
 from custom_components.rusthinq import embedded, migrate
 from custom_components.rusthinq.const import (
     CONF_ARCHIVE,
@@ -232,6 +233,29 @@ def test_a_different_installation_already_there_is_kept(old_install, tmp_path):
     migrate.install(fresh, imported)
     migrate.install(fresh, imported)  # the same again is fine
     assert oct((fresh / "ca.key").stat().st_mode & 0o777) == "0o600"
+
+
+def test_an_embedded_install_can_be_backed_up_and_imported_again(ca, tmp_path):
+    key, cert = ca
+    (tmp_path / "ca.key").write_bytes(key)
+    (tmp_path / "ca.cert").write_bytes(cert)
+    (tmp_path / "devices-v2.json").write_bytes(b'{"entries":[]}')
+    (tmp_path / "cloud-account-v2.json").write_bytes(b'{"credentials":{"country":"KR"}}')
+    (tmp_path / "cloud-account-v2.json.pairings").write_bytes(b"[]")
+    (tmp_path / "config.toml").write_text(
+        'ca_key = "ca.key"\nca_certificate = "ca.cert"\ndevice_ledger = "devices-v2.json"\n'
+        'cloud_account = "cloud-account-v2.json"\nhostname = "rusthinq.local"\n'
+    )
+
+    imported = migrate.read_export(backup_module.create(tmp_path))
+
+    assert imported.files == {
+        "ca.key": key,
+        "ca.cert": cert,
+        "devices-v2.json": b'{"entries":[]}',
+        "cloud-account-v2.json": b'{"credentials":{"country":"KR"}}',
+        "cloud-account-v2.json.pairings": b"[]",
+    }
 
 
 def test_imported_settings_reach_the_daemon_configuration():

@@ -11,7 +11,7 @@ ledger, the LG account and its pairings, and the settings appliances or drivers 
 `advertise_requested_host`, `[drivers] topic_prefix`, `bridge_dns`), and the listener ports from the `*_bind`
 addresses, which the config flow suggests for this host. External MQTT and its retained-topic inventory stay behind,
 since Home Assistant is the MQTT consumer now. Files land under `config-0.2.sh`'s names, as the embedded daemon
-expects. Nothing already in the data directory is replaced by something different.
+expects. Different files already in the data directory require an explicit overwrite choice at install time.
 """
 
 from __future__ import annotations
@@ -282,10 +282,11 @@ def conflicts(directory: Path, imported: Imported) -> list[str]:
     )
 
 
-def install(directory: Path, imported: Imported) -> None:
+def install(directory: Path, imported: Imported, overwrite: bool = False) -> None:
     from .embedded import _write
 
-    if clash := conflicts(directory, imported):
+    clash = conflicts(directory, imported)
+    if clash and not overwrite:
         raise MigrateError(f"{directory} already holds a different {', '.join(clash)}")
     directory.mkdir(parents=True, exist_ok=True)
     for name, data in imported.files.items():

@@ -1,6 +1,7 @@
 """The LG account (options flow, account sensor) and each device's LG bridge controls."""
 
 import asyncio
+from pathlib import Path
 
 import pytest
 from conftest import AC, EMBEDDED
@@ -49,7 +50,7 @@ async def test_signing_in_and_out_through_the_options(hass, air_conditioner):
     assert state(hass, "binary_sensor", account).state == STATE_OFF
 
     menu = await hass.config_entries.options.async_init(entry.entry_id)
-    assert menu["menu_options"] == ["login"]
+    assert menu["menu_options"] == ["login", "reset"]
     form = await hass.config_entries.options.async_configure(menu["flow_id"], {"next_step_id": "login"})
     assert form["step_id"] == "login"
     paste = await hass.config_entries.options.async_configure(form["flow_id"], {"country": " kr "})
@@ -64,11 +65,36 @@ async def test_signing_in_and_out_through_the_options(hass, air_conditioner):
     assert state(hass, "binary_sensor", account).attributes["country"] == "KR"
 
     menu = await hass.config_entries.options.async_init(entry.entry_id)
-    assert menu["menu_options"] == ["logout", "refresh"]
+    assert menu["menu_options"] == ["logout", "refresh", "reset"]
     confirm = await hass.config_entries.options.async_configure(menu["flow_id"], {"next_step_id": "logout"})
     done = await hass.config_entries.options.async_configure(confirm["flow_id"], {})
     assert done["type"] == "create_entry"
     await eventually(hass, lambda: state(hass, "binary_sensor", account).state == STATE_OFF)
+
+
+async def test_reset_clears_state_and_reloads_the_entry(hass, air_conditioner):
+    entry = await setup(hass)
+    directory = Path(hass.config.path(DOMAIN))
+    directory.mkdir(exist_ok=True)
+    (directory / "ca.key").write_text("old CA")
+    (directory / "devices-v2.json").write_text("old ledger")
+    (directory / "bin").mkdir(exist_ok=True)
+    (directory / "bin" / "rusthinq").write_text("binary")
+
+    menu = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "reset" in menu["menu_options"]
+    form = await hass.config_entries.options.async_configure(menu["flow_id"], {"next_step_id": "reset"})
+    assert form["step_id"] == "reset"
+    warning = await hass.config_entries.options.async_configure(form["flow_id"], {"confirm_reset": False})
+    assert warning["errors"] == {"base": "reset_required"}
+    done = await hass.config_entries.options.async_configure(warning["flow_id"], {"confirm_reset": True})
+
+    assert done["type"] == "create_entry"
+    assert entry.state.value == "loaded"
+    assert not (directory / "ca.key").exists()
+    assert not (directory / "devices-v2.json").exists()
+    assert (directory / "bin" / "rusthinq").read_text() == "binary"
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_a_refused_sign_in_says_why(hass, air_conditioner):

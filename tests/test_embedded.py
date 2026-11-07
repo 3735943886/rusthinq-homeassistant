@@ -27,6 +27,21 @@ from custom_components.rusthinq.const import (
 EPHEMERAL = {CONF_HTTPS_PORT: 0, CONF_MQTT_PORT: 0, CONF_THINQ1_HTTPS_PORT: 0, CONF_THINQ1_PORT: 0}
 
 
+def test_reset_keeps_the_daemon_and_driver_downloads(config_dir):
+    (config_dir / "bin").mkdir()
+    (config_dir / "bin" / "rusthinq").write_text("binary")
+    (config_dir / "scripts" / "drivers" / "driver.py").write_text("driver")
+    (config_dir / "ca.key").write_text("secret")
+    (config_dir / "devices-v2.json").write_text("ledger")
+    (config_dir / "config.toml").write_text("settings")
+
+    embedded.reset_data(config_dir)
+
+    assert (config_dir / "bin" / "rusthinq").read_text() == "binary"
+    assert (config_dir / "scripts" / "drivers" / "driver.py").read_text() == "driver"
+    assert {path.name for path in config_dir.iterdir()} == {"bin", "scripts"}
+
+
 @pytest.fixture(autouse=True)
 def _custom(enable_custom_integrations, socket_enabled):
     return

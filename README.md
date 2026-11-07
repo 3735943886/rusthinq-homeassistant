@@ -33,6 +33,11 @@ On the first start Home Assistant installs the `rusthinq` package from PyPI (the
 downloads the drivers ([rusthinq-scripts](https://github.com/3735943886/rusthinq-scripts)). Everything lives in
 `/config/rusthinq/`, which Home Assistant backups include. `ca.key` and the LG account files are secrets.
 
+The rusthinq service device has a **Download backup** button. Press it, then follow the authenticated download link in
+the Home Assistant notification. The archive contains the daemon configuration, CA, device ledger and LG account
+files needed to move the installation. In **Configure**, **Reset rusthinq data** clears those files and retained device
+state, then creates a new CA; appliances may need provisioning again. Downloaded binaries and drivers are kept.
+
 ## Ports
 
 | Listener | Default | Notes |
@@ -83,7 +88,9 @@ asks for this host's ports, filled in with the old installation's. Then:
 The CA, the device ledger, the LG account with its pairings and the settings appliances notice (`hostname`,
 `legacy_tls`, `advertise_requested_host`, `bridge_dns`, the driver topic prefix) move over, and the listener ports
 are suggested. External MQTT and its
-retained-topic inventory stay behind. Different files already in `/config/rusthinq/` are never replaced.
+retained-topic inventory stay behind. If files in `/config/rusthinq/` differ from the backup, the confirmation step lists
+them and requires an explicit choice to overwrite those included in the backup. Files absent from the backup are kept.
+Replacing the CA may require provisioning appliances again.
 
 ## LG account
 

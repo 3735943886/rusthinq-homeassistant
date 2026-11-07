@@ -82,6 +82,17 @@ def data_dir(hass: HomeAssistant) -> Path:
     return Path(hass.config.path(DOMAIN))
 
 
+def reset_data(directory: Path) -> None:
+    """Clear rusthinq's state while keeping downloaded executables and driver scripts reusable."""
+    for child in directory.iterdir() if directory.exists() else ():
+        if child.name in {"bin", "scripts"}:
+            continue
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink(missing_ok=True)
+
+
 # ---- files ---------------------------------------------------------------------------------
 
 
