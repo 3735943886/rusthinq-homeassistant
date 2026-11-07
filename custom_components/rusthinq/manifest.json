@@ -13,7 +13,7 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/3735943886/rusthinq-local/issues",
   "requirements": [
-    "ildevice-homeassistant==0.2.0"
+    "ildevice-homeassistant==0.2.1"
   ],
   "version": "0.0.8"
 }

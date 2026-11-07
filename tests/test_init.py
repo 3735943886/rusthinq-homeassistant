@@ -124,3 +124,21 @@ async def test_a_command_rusthinq_refuses_fires_the_rejection_event(hass, air_co
                                                                   "temperature": 22}, blocking=True)
     await eventually(hass, lambda: events)
     assert {k: events[0].data.get(k) for k in ("prop", "code")} == {"prop": "target", "code": "unavailable"}
+
+
+async def test_an_image_property_creates_an_image_entity(hass, rusthinq):
+    desc = {
+        "il": 0,
+        "id": "vac01",
+        "props": {"map": {"type": "image", "label": "Cleaning Map"}},
+    }
+    rusthinq.add_device("vac01", [{"topic": "rusthinq/vac01/descriptor", "payload": json.dumps(desc)}])
+    await setup(hass)
+    registry = er.async_get(hass)
+    await eventually(
+        hass,
+        lambda: any(e.domain == "image" for e in registry.entities.values()),
+    )
+    image_entity = next(e for e in registry.entities.values() if e.domain == "image")
+    assert image_entity.platform == DOMAIN
+

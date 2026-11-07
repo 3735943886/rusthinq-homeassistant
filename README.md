@@ -10,13 +10,18 @@ instead of LG's cloud, and their drivers' output becomes Home Assistant devices 
 ## Requirements
 
 - Home Assistant 2025.1.3 or later.
-- Appliances must reach this host on TCP 443 (see [Ports](#ports)) and be provisioned for rusthinq, or already be
-  provisioned for an existing rusthinq that you move in.
+- LG appliances must be able to reach this Home Assistant host on TCP 443. If your network routes ThinQ traffic by
+  DNS, point the rusthinq hostname (default `rusthinq.lan`) at this host; a router redirect or DNAT can be used
+  instead. See [Ports](#ports). For an existing rusthinq installation, move its appliance route to this host as part
+  of the migration.
+- New installations need the appliances provisioned for rusthinq. Appliances already provisioned for an existing
+  rusthinq can keep their CA and device setup when you [move the installation](#moving-an-existing-installation).
 
 ## Installation
 
-1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/3735943886/rusthinq-local`
-   (category Integration). Install **rusthinq**, then restart Home Assistant. Its entities come from
+1. In Marketplace, find **rusthinq** under Integrations and download it, then restart Home Assistant. If this repository
+   has not yet appeared in the Marketplace default store, add `https://github.com/3735943886/rusthinq-local` using
+   **Add from link** and download it. Its entities come from
    [IL device](https://github.com/3735943886/ildevice-homeassistant)'s code, which Home Assistant installs from PyPI
    with it; the IL device integration itself is not needed.
 2. Settings → Devices & services → Add integration → **rusthinq**, and choose:
@@ -37,8 +42,11 @@ downloads the drivers ([rusthinq-scripts](https://github.com/3735943886/rusthinq
 | ThinQ1 HTTPS / ThinQ1 | 46030 / 47878 | Older ThinQ1 appliances. |
 | Management API | random, 127.0.0.1 only | Used by this integration; nothing to configure. |
 
-The setup checks the ports before writing anything. A port that becomes unusable later is raised in Settings →
-Repairs, and rusthinq keeps retrying.
+The default rusthinq hostname is `rusthinq.lan`; appliances must resolve or be routed to the Home Assistant host at
+that address. If your LAN uses a different DNS name or a router redirect, configure that network path before
+provisioning appliances. For an existing installation, preserve its hostname and move the corresponding DNS or
+redirect rule with it. The setup checks the ports before writing anything. A port that becomes unusable later is
+raised in Settings → Repairs, and rusthinq keeps retrying.
 
 When 443 is already taken on the host, run rusthinq's HTTPS on another port (8443, say) and send the appliances'
 port 443 there. rusthinq then tells appliances 443 anyway. In order of preference:
