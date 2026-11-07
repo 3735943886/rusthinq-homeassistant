@@ -10,12 +10,10 @@ instead of LG's cloud, and their drivers' output becomes Home Assistant devices 
 ## Requirements
 
 - Home Assistant 2025.1.3 or later.
-- LG appliances must be able to reach this Home Assistant host on TCP 443. If your network routes ThinQ traffic by
-  DNS, point the rusthinq hostname (default `rusthinq.lan`) at this host; a router redirect or DNAT can be used
-  instead. See [Ports](#ports). For an existing rusthinq installation, move its appliance route to this host as part
-  of the migration.
-- New installations need the appliances provisioned for rusthinq. Appliances already provisioned for an existing
-  rusthinq can keep their CA and device setup when you [move the installation](#moving-an-existing-installation).
+- LG appliances must be able to reach this Home Assistant host on TCP 443 (or an alternative port via router DNAT;
+  see [Ports](#ports)).
+- For new installations, see [Connecting appliances](#connecting-appliances). Appliances already provisioned for an
+  existing rusthinq can keep their CA and device setup when you [move the installation](#moving-an-existing-installation).
 
 ## Installation
 
@@ -45,23 +43,49 @@ state, then creates a new CA; appliances may need provisioning again. Downloaded
 | ThinQ1 HTTPS / ThinQ1 | 46030 / 47878 | Older ThinQ1 appliances. |
 | Management API | random, 127.0.0.1 only | Used by this integration; nothing to configure. |
 
-The default rusthinq hostname is `rusthinq.lan`; appliances must resolve or be routed to the Home Assistant host at
-that address. If your LAN uses a different DNS name or a router redirect, configure that network path before
-provisioning appliances. For an existing installation, preserve its hostname and move the corresponding DNS or
-redirect rule with it. The setup checks the ports before writing anything. A port that becomes unusable later is
-raised in Settings → Repairs, and rusthinq keeps retrying.
+The setup checks port availability before saving configuration. If a port becomes unusable later, an issue is raised
+in Settings → Repairs, and rusthinq keeps retrying.
 
-When 443 is already taken on the host, run rusthinq's HTTPS on another port (8443, say) and send the appliances'
-port 443 there. rusthinq then tells appliances 443 anyway. In order of preference:
+The default hostname `rusthinq.lan` serves as a fallback for environments where router DNAT is not available and
+traffic must be steered via local DNS overrides instead. When using router DNAT, no DNS configuration is required.
 
-1. **Host firewall** (Home Assistant Container, Supervised, Core): redirect 443 from the appliances only, e.g. with
-   their DHCP-reserved addresses in an ipset:
-   `iptables -t nat -A PREROUTING -p tcp --dport 443 -m set --match-set lg_appliances src -j REDIRECT --to-ports 8443`
-2. **Router** (Home Assistant OS, which has no host firewall to change): a DNAT rule for the appliances' 443 to this
-   host's 8443. The appliances' traffic must pass the router (an IoT VLAN, for instance).
-3. **TLS passthrough proxy on 443** (nginx `stream` with `ssl_preread`, HAProxy, Traefik `HostSNI`): send LG's host
-   names **and connections without SNI** to rusthinq unterminated. Some appliances send no SNI. A proxy that
-   terminates TLS does not work.
+When port 443 is already in use on the host (e.g. by a reverse proxy or SSL add-on), configure rusthinq's HTTPS to
+another port (such as 8443). Outbound port 443 traffic from appliances is then routed to that port as described in
+[Connecting appliances](#connecting-appliances). rusthinq continues to advertise port 443 to appliances regardless of
+the listener port.
+
+## Connecting appliances
+
+Appliances already registered in the official LG ThinQ app do not need a factory reset or re-provisioning.
+Connecting them requires routing their outbound TCP 443 traffic to this Home Assistant host (default port 443, or
+another port like 8443 if 443 is taken).
+
+1. **Network connectivity**:
+   New appliances are first set up in the official LG ThinQ app to join the Wi-Fi network and obtain a DHCP lease
+   (static DHCP reservations are recommended).
+2. **Route appliance traffic (leave DNS untouched)**:
+   In order of preference:
+   - **Router / Gateway DNAT** (Recommended; standard for Home Assistant OS and IoT VLANs):
+     Forward port 443 from appliance IP addresses to Home Assistant (see [Router configuration examples](docs/routers.md)):
+     `iptables -t nat -A PREROUTING -p tcp -m iprange --src-range <appliance_ips> --dport 443 -j DNAT --to-destination <ha_ip>:<port>`
+     (or with an ipset: `iptables -t nat -A PREROUTING -p tcp -m set --match-set lg_appliances src --dport 443 -j DNAT --to-destination <ha_ip>:<port>`)
+   - **Host firewall** (Home Assistant Container, Supervised, Core on a custom Linux host):
+     Redirect 443 locally for appliance source addresses:
+     `iptables -t nat -A PREROUTING -p tcp -m iprange --src-range <appliance_ips> --dport 443 -j REDIRECT --to-ports <port>`
+     (or with an ipset: `iptables -t nat -A PREROUTING -p tcp -m set --match-set lg_appliances src --dport 443 -j REDIRECT --to-ports <port>`)
+   - **TLS passthrough proxy on 443** (nginx `stream` with `ssl_preread`, HAProxy, Traefik `HostSNI`):
+     Send LG hostnames and connections without SNI to rusthinq unterminated. Some appliances send no SNI. Proxies
+     terminating TLS do not work.
+3. **Reconnect the appliance**:
+   Power-cycle the appliance or disconnect/reconnect it from Wi-Fi so it drops the existing LG session and reconnects
+   through the new route. Alternatively, clear active router connection tracking with
+   `conntrack -D -p tcp -s <appliance_ip>`.
+4. **Automatic discovery**:
+   Once the appliance connects to rusthinq, Home Assistant automatically creates the corresponding device and entities.
+5. **Retain the official LG ThinQ app (Optional)**:
+   Sign in to the LG account under Settings → Devices & services → rusthinq → **Configure**. Then on the appliance's
+   device page in Home Assistant, press **Pair with LG**. This starts the local LG cloud bridge, keeping the official
+   mobile app operational alongside Home Assistant.
 
 ## Moving an existing installation
 
