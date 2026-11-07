@@ -110,6 +110,8 @@ async def test_backup_notification_uses_a_signed_download_link(hass, air_conditi
     await hass.async_block_till_done()
     backup_button = er.async_get(hass).async_get_entity_id("button", DOMAIN, f"{entry.entry_id}-backup")
     assert backup_button is not None
+    assert backup_button.endswith("download_backup")
+    assert hass.states.get(backup_button).name.endswith("Download backup")
 
     with patch("custom_components.rusthinq.status.persistent_notification.async_create") as notify:
         await hass.services.async_call("button", "press", {"entity_id": backup_button}, blocking=True)

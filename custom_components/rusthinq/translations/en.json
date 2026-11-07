@@ -81,6 +81,13 @@
       "already_configured": "rusthinq is already set up."
     }
   },
+  "entity": {
+    "button": {
+      "backup": {
+        "name": "Download backup"
+      }
+    }
+  },
   "issues": {
     "ports_unavailable": {
       "title": "rusthinq cannot open its ports",
