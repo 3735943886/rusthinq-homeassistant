@@ -2,6 +2,7 @@
 
 import asyncio
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from conftest import AC, EMBEDDED
@@ -11,6 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.rusthinq import client as client_module
+from custom_components.rusthinq import embedded, migrate
 from custom_components.rusthinq.const import DOMAIN, MODE_EMBEDDED
 
 
@@ -94,6 +96,30 @@ async def test_reset_clears_state_and_reloads_the_entry(hass, air_conditioner):
     assert not (directory / "ca.key").exists()
     assert not (directory / "devices-v2.json").exists()
     assert (directory / "bin" / "rusthinq").read_text() == "binary"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_backup_notification_uses_a_signed_download_link(hass, air_conditioner, hass_client_no_auth):
+    entry = await setup(hass)
+    directory = Path(hass.config.path(DOMAIN))
+    embedded.ensure_ca(directory)
+    (directory / "devices-v2.json").write_text('{"entries":[]}')
+    (directory / "config.toml").write_text(
+        'ca_key = "ca.key"\nca_certificate = "ca.cert"\ndevice_ledger = "devices-v2.json"\n'
+    )
+    await hass.async_block_till_done()
+    backup_button = er.async_get(hass).async_get_entity_id("button", DOMAIN, f"{entry.entry_id}-backup")
+    assert backup_button is not None
+
+    with patch("custom_components.rusthinq.status.persistent_notification.async_create") as notify:
+        await hass.services.async_call("button", "press", {"entity_id": backup_button}, blocking=True)
+
+    message = notify.call_args.args[1]
+    signed_path = message.split("(", 1)[1].split(")", 1)[0]
+    response = await (await hass_client_no_auth()).get(signed_path)
+    assert response.status == 200
+    imported = migrate.read_export(await response.read())
+    assert set(imported.files) == {"ca.key", "ca.cert", "devices-v2.json"}
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

@@ -14,11 +14,13 @@ All are unavailable while the daemon is unreachable.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
 from homeassistant.components.button import ButtonEntity
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
@@ -168,7 +170,8 @@ class BackupButton(ButtonEntity):
         self._attr_device_info = service_device(entry)
 
     async def async_press(self) -> None:
-        link = f"/api/rusthinq/backup/{self._entry.entry_id}"
+        path = f"/api/rusthinq/backup/{self._entry.entry_id}"
+        link = async_sign_path(self.hass, path, timedelta(hours=1))
         korean = self.hass.config.language.startswith("ko")
         persistent_notification.async_create(
             self.hass,
