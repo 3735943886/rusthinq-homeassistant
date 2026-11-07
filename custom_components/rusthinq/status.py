@@ -173,9 +173,14 @@ class BackupButton(ButtonEntity):
         path = f"/api/rusthinq/backup/{self._entry.entry_id}"
         link = async_sign_path(self.hass, path, timedelta(hours=1))
         korean = self.hass.config.language.startswith("ko")
+        message = (
+            f"[백업 다운로드]({link})\n\n새 탭에서 열기(Ctrl+클릭) 또는 우클릭하여 다운로드하세요."
+            if korean
+            else f"[Download the rusthinq backup]({link})\n\nOpen in a new tab (Ctrl+click) or right-click to download."
+        )
         persistent_notification.async_create(
             self.hass,
-            f"[백업 다운로드]({link})" if korean else f"[Download the rusthinq backup]({link})",
+            message,
             title="rusthinq 백업" if korean else "rusthinq backup",
             notification_id=f"rusthinq_backup_{self._entry.entry_id}",
         )

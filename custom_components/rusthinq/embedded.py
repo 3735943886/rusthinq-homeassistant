@@ -153,6 +153,7 @@ def render_config(*, https_port: int, mqtt_port: int, thinq1_https_port: int, th
 
 def ensure_ca(directory: Path) -> None:
     """Create the CA like `config-0.2.sh` `initialize_ca` unless one is there; never replace half of one."""
+    directory.mkdir(parents=True, exist_ok=True)
     key, cert = directory / "ca.key", directory / "ca.cert"
     if key.exists() or cert.exists():
         if not (key.is_file() and cert.is_file()):
